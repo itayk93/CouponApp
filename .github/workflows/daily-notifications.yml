@@ -1,0 +1,23 @@
+name: Daily Notification Check
+
+on:
+  schedule:
+    # Run daily at 20:14 UTC (adjust timezone as needed)
+    - cron: '14 20 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  send-notifications:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Send Daily Notifications
+      run: |
+        curl -X POST \
+          ${{ secrets.NOTIFICATIONS_SUPABASE_URL }}/functions/v1/send-daily-notifications \
+          -H "Authorization: Bearer ${{ secrets.NOTIFICATIONS_SUPABASE_ANON_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{}'
+      
+    - name: Log result
+      run: echo "Daily notification check completed at $(date)"

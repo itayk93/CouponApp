@@ -1,0 +1,33 @@
+//
+// Config.xcconfig.example
+// CouponManagerApp
+//
+// Configuration Settings File Template
+// Copy this file to Config.xcconfig and fill in your actual API keys
+// DO NOT commit Config.xcconfig to Git - it should remain private
+//
+
+// Main Supabase Configuration (Coupons Database)
+// Get these values from your main Supabase project dashboard
+SUPABASE_URL = https:/$()/your-main-project-url.supabase.co
+SUPABASE_ANON_KEY = your_main_supabase_anon_key_here
+
+// Notifications Supabase Configuration
+// Get these values from your notifications Supabase project dashboard
+NOTIFICATIONS_SUPABASE_URL = https:/$()/your-notifications-project-url.supabase.co
+NOTIFICATIONS_SUPABASE_ANON_KEY = your_notifications_supabase_anon_key_here
+
+// OpenAI Configuration
+// Get your API key from https://platform.openai.com/api-keys
+OPENAI_API_KEY = your_openai_api_key_here
+
+// Python Server Configuration
+// URL of your Python backend server
+PYTHON_SERVER_URL = https:/$()/your-python-server.com
+
+// Instructions:
+// 1. Copy this file to Config.xcconfig
+// 2. Replace all placeholder values with your actual API keys
+// 3. Make sure Config.xcconfig is listed in your .gitignore file
+// 4. In Xcode, make sure the project is configured to use Config.xcconfig
+//    (Project Settings > Build Settings > User-Defined)

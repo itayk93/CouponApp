@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coupon Manager App Icon Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .icon-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+        
+        .icon {
+            width: 1024px;
+            height: 1024px;
+            border-radius: 180px;
+            background: linear-gradient(135deg, #4169E1 0%, #87CEEB 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+        
+        .coupon-shape {
+            width: 700px;
+            height: 450px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 30px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .coupon-shape::before {
+            content: '';
+            position: absolute;
+            left: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #4169E1 0%, #87CEEB 100%);
+            border-radius: 50%;
+        }
+        
+        .coupon-shape::after {
+            content: '';
+            position: absolute;
+            right: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #4169E1 0%, #87CEEB 100%);
+            border-radius: 50%;
+        }
+        
+        .coupon-content {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+        }
+        
+        .percent-sign {
+            font-size: 200px;
+            font-weight: bold;
+            color: #4169E1;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .shekel-sign {
+            font-size: 140px;
+            font-weight: bold;
+            color: #2E8B57;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .dotted-line {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: repeating-linear-gradient(
+                to bottom,
+                #4169E1 0px,
+                #4169E1 15px,
+                transparent 15px,
+                transparent 30px
+            );
+            transform: translateX(-50%);
+        }
+        
+        .small-icons {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .icon-small {
+            width: 180px;
+            height: 180px;
+            border-radius: 32px;
+            background: linear-gradient(135deg, #4169E1 0%, #87CEEB 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .icon-small .coupon-shape {
+            width: 120px;
+            height: 80px;
+            border-radius: 8px;
+        }
+        
+        .icon-small .coupon-shape::before,
+        .icon-small .coupon-shape::after {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .icon-small .coupon-shape::before {
+            left: -8px;
+        }
+        
+        .icon-small .coupon-shape::after {
+            right: -8px;
+        }
+        
+        .icon-small .percent-sign {
+            font-size: 40px;
+        }
+        
+        .icon-small .shekel-sign {
+            font-size: 28px;
+        }
+        
+        .icon-small .dotted-line {
+            width: 2px;
+            background: repeating-linear-gradient(
+                to bottom,
+                #4169E1 0px,
+                #4169E1 4px,
+                transparent 4px,
+                transparent 8px
+            );
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .download-section {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .download-btn {
+            background: #4169E1;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .download-btn:hover {
+            background: #2E4BC6;
+        }
+    </style>
+</head>
+<body>
+    <h1>Coupon Manager App Icons</h1>
+    
+    <div class="icon-container">
+        <!-- Main 1024x1024 Icon -->
+        <div class="icon" id="icon-1024">
+            <div class="coupon-shape">
+                <div class="dotted-line"></div>
+                <div class="coupon-content">
+                    <div class="percent-sign">%</div>
+                    <div class="shekel-sign">₪</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="download-section">
+        <button class="download-btn" onclick="downloadIcon('icon-1024', '1024')">Download 1024x1024</button>
+        <button class="download-btn" onclick="generateAllSizes()">Generate All iOS Sizes</button>
+    </div>
+    
+    <div class="small-icons" id="small-icons-container">
+        <!-- Small icons will be generated here -->
+    </div>
+
+    <script>
+        function downloadIcon(elementId, size) {
+            const element = document.getElementById(elementId);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = parseInt(size);
+            canvas.height = parseInt(size);
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, '#4169E1');
+            gradient.addColorStop(1, '#87CEEB');
+            
+            // Draw rounded rectangle background
+            const radius = canvas.width * 0.176; // iOS app icon corner radius
+            ctx.fillStyle = gradient;
+            roundRect(ctx, 0, 0, canvas.width, canvas.height, radius);
+            ctx.fill();
+            
+            // Draw coupon shape
+            const couponWidth = canvas.width * 0.68;
+            const couponHeight = canvas.height * 0.44;
+            const couponX = (canvas.width - couponWidth) / 2;
+            const couponY = (canvas.height - couponHeight) / 2;
+            const couponRadius = canvas.width * 0.029;
+            
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            roundRect(ctx, couponX, couponY, couponWidth, couponHeight, couponRadius);
+            ctx.fill();
+            
+            // Draw semi-circles on sides
+            const circleRadius = canvas.width * 0.024;
+            ctx.fillStyle = gradient;
+            
+            // Left circle
+            ctx.beginPath();
+            ctx.arc(couponX, couponY + couponHeight/2, circleRadius, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Right circle
+            ctx.beginPath();
+            ctx.arc(couponX + couponWidth, couponY + couponHeight/2, circleRadius, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw dotted line
+            ctx.strokeStyle = '#4169E1';
+            ctx.lineWidth = canvas.width * 0.003;
+            ctx.setLineDash([canvas.width * 0.015, canvas.width * 0.015]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, couponY);
+            ctx.lineTo(canvas.width / 2, couponY + couponHeight);
+            ctx.stroke();
+            
+            // Draw percent sign
+            ctx.fillStyle = '#4169E1';
+            ctx.font = `bold ${canvas.width * 0.195}px -apple-system, BlinkMacSystemFont, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('%', canvas.width * 0.4, canvas.height * 0.5);
+            
+            // Draw shekel sign
+            ctx.fillStyle = '#2E8B57';
+            ctx.font = `bold ${canvas.width * 0.137}px -apple-system, BlinkMacSystemFont, sans-serif`;
+            ctx.fillText('₪', canvas.width * 0.6, canvas.height * 0.5);
+            
+            // Download
+            const link = document.createElement('a');
+            link.download = `coupon-manager-icon-${size}x${size}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+        
+        function generateAllSizes() {
+            const sizes = [20, 29, 40, 58, 60, 76, 80, 87, 120, 152, 167, 180, 1024];
+            
+            sizes.forEach(size => {
+                setTimeout(() => {
+                    downloadIcon('icon-1024', size.toString());
+                }, 100);
+            });
+        }
+    </script>
+</body>
+</html>
