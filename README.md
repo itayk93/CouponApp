@@ -45,13 +45,10 @@ CouponManagerApp/
    ```
 
 2. **Configure API Keys**
-   ```bash
-   cp Config.xcconfig.example Config.xcconfig
-   ```
-   Edit `Config.xcconfig` and add your API keys:
-   - Supabase URL and anon key
-   - OpenAI API key
-   - Notifications Supabase URL and key (if using separate instance)
+   Set up your configuration file with the required API keys for:
+   - Database connection
+   - AI text processing
+   - Cloud functions (if needed)
 
 3. **Open in Xcode**
    ```bash
@@ -60,8 +57,8 @@ CouponManagerApp/
 
 4. **Configure Project Settings**
    - In Xcode, select your project
-   - Go to Build Settings
-   - Ensure Config.xcconfig is selected for Debug and Release configurations
+   - Configure build settings with your API keys
+   - Set up the required environment variables
 
 5. **Build and Run**
    - Select your target device
@@ -69,28 +66,18 @@ CouponManagerApp/
 
 ## 🔧 Configuration
 
-The app uses a secure configuration system to protect API keys:
+The app uses a secure configuration system to protect API keys.
 
-### Required Environment Variables
-Create `Config.xcconfig` based on the example template:
+### Required Services
+You'll need accounts and API keys for:
+- **Database Service**: For data storage and synchronization
+- **AI Service**: For intelligent text and image processing
+- **Cloud Functions**: For automated notifications (optional)
 
-```xcconfig
-# Main Supabase Configuration
-SUPABASE_URL = https://your-project-url.supabase.co
-SUPABASE_ANON_KEY = your_supabase_anon_key
-
-# OpenAI Configuration  
-OPENAI_API_KEY = your_openai_api_key
-
-# Notifications (optional separate Supabase instance)
-NOTIFICATIONS_SUPABASE_URL = https://your-notifications-url.supabase.co
-NOTIFICATIONS_SUPABASE_ANON_KEY = your_notifications_key
-```
+See the example configuration file for the required format.
 
 ### GitHub Secrets (for CI/CD)
-If using GitHub Actions, configure these secrets:
-- `NOTIFICATIONS_SUPABASE_URL`
-- `NOTIFICATIONS_SUPABASE_ANON_KEY`
+If using GitHub Actions, configure the required secrets for your services in your repository settings.
 
 ## 📱 Features Overview
 
@@ -164,7 +151,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔒 Security
 
-- All API keys are secured and never committed to version control
+- Secure API key management
 - Data encryption at rest and in transit
 - Biometric authentication for app access
 - Regular security audits and updates
