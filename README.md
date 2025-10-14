@@ -33,36 +33,7 @@ CouponManagerApp/
 ### Prerequisites
 - Xcode 15.0 or later
 - iOS 16.0+ deployment target
-- Supabase account
-- OpenAI API key
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/itayk93/CouponApp.git
-   cd CouponApp
-   ```
-
-2. **Configure API Keys**
-   Set up your configuration file with the required API keys for:
-   - Database connection
-   - AI text processing
-   - Cloud functions (if needed)
-
-3. **Open in Xcode**
-   ```bash
-   open CouponManagerApp.xcodeproj
-   ```
-
-4. **Configure Project Settings**
-   - In Xcode, select your project
-   - Configure build settings with your API keys
-   - Set up the required environment variables
-
-5. **Build and Run**
-   - Select your target device
-   - Press Cmd+R to build and run
+- Required service accounts for database and AI processing
 
 ## 🔧 Configuration
 
@@ -137,30 +108,12 @@ Automated notification system with:
 - Monthly savings reports
 - Configurable timing and preferences
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 🔒 Security
 
 - Secure API key management
 - Data encryption at rest and in transit
 - Biometric authentication for app access
 - Regular security audits and updates
-
-## 📞 Support
-
-For questions, issues, or feature requests:
-- Open an issue on GitHub
-- Check the [Documentation](Documentation/) folder for detailed guides
 
 ---
 
