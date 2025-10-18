@@ -34,7 +34,8 @@ class AppGroupManager {
                 status: coupon.status,
                 isOneTime: coupon.isOneTime,
                 userId: coupon.userId,
-                showInWidget: coupon.showInWidget
+                showInWidget: coupon.showInWidget,
+                widgetDisplayOrder: coupon.widgetDisplayOrder
             )
         }
         
@@ -48,7 +49,6 @@ class AppGroupManager {
                let savedCoupons = try? JSONDecoder().decode([WidgetCoupon].self, from: savedData) {
                 print("✅ Verified: \(savedCoupons.count) coupons in shared container")
                 let widgetCount = savedCoupons.filter { $0.showInWidget == true }.count
-                print("✅ Widget coupons (showInWidget=true): \(widgetCount)")
             } else {
                 print("❌ Failed to verify saved data")
             }
@@ -83,9 +83,28 @@ class AppGroupManager {
               let coupons = try? JSONDecoder().decode([AppGroupManager.WidgetCoupon].self, from: data) else {
             return []
         }
-        return coupons
+        
+        // 🎯 Sort coupons by widget_display_order for widget display
+        let sortedCoupons = coupons.sorted { coupon1, coupon2 in
+            // If both have widget_display_order, sort by it (ascending)
+            if let order1 = coupon1.widgetDisplayOrder, let order2 = coupon2.widgetDisplayOrder {
+                return order1 < order2
+            }
+            // If only coupon1 has order, it comes first
+            if coupon1.widgetDisplayOrder != nil {
+                return true
+            }
+            // If only coupon2 has order, it comes first
+            if coupon2.widgetDisplayOrder != nil {
+                return false
+            }
+            // If neither has order, maintain original order
+            return false
+        }
+        
+        return sortedCoupons
     }
-    
+
     func getCompaniesFromSharedContainer() -> [AppGroupManager.WidgetCompany] {
         guard let sharedDefaults = sharedUserDefaults,
               let data = sharedDefaults.data(forKey: companiesKey),
@@ -132,14 +151,15 @@ class AppGroupManager {
             telegramMonthlySummary: false,
             newsletterImage: nil,
             showWhatsappBanner: false,
-            faceIdEnabled: nil
+            faceIdEnabled: nil,
+            pushToken: nil
         )
     }
     
     func saveCurrentUserToSharedContainer(_ user: User) {
-        print("🔐 APP: saveCurrentUserToSharedContainer called for user ID: \(user.id)")
-        print("🔐 APP: App group identifier: \(appGroupIdentifier)")
-        print("🔐 APP: User details: email=\(user.email), firstName=\(user.firstName ?? "nil"), lastName=\(user.lastName ?? "nil")")
+        //print("🔐 APP: saveCurrentUserToSharedContainer called for user ID: \(user.id)")
+        //print("🔐 APP: App group identifier: \(appGroupIdentifier)")
+        //print("🔐 APP: User details: email=\(user.email), firstName=\(user.firstName ?? "nil"), lastName=\(user.lastName ?? "nil")")
         
         guard let sharedDefaults = sharedUserDefaults else {
             print("❌ APP: Failed to get shared user defaults for user save")
@@ -147,8 +167,8 @@ class AppGroupManager {
             return
         }
         
-        print("🔐 APP: SharedUserDefaults acquired successfully")
-        print("🔐 APP: Suite name: \(appGroupIdentifier)")
+        //print("🔐 APP: SharedUserDefaults acquired successfully")
+        //print("🔐 APP: Suite name: \(appGroupIdentifier)")
         
         // Create username from firstName + lastName or fallback to email
         let username = [user.firstName, user.lastName]
@@ -250,6 +270,7 @@ extension AppGroupManager {
         let isOneTime: Bool
         let userId: Int
         let showInWidget: Bool?
+        let widgetDisplayOrder: Int?
         
         var remainingValue: Double {
             return value - usedValue

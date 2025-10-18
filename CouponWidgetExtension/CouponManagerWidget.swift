@@ -179,7 +179,7 @@ struct Provider: TimelineProvider {
                     let allCoupons = try await WidgetAPIClient.shared.getCoupons()
                     let activeCoupons = allCoupons.filter { $0.status == "פעיל" }
                     let activeCouponsCount = activeCoupons.count
-                    let totalValue = activeCoupons.reduce(0.0) { $0 + $1.remainingValue }
+                    let totalValue = activeCoupons.filter { !$0.isOneTime }.reduce(0.0) { $0 + $1.remainingValue }
                     let widgetCoupons = allCoupons.filter { $0.showInWidget == true }
                     let companies = try await WidgetAPIClient.shared.getCompanies()
                     
@@ -219,7 +219,7 @@ struct Provider: TimelineProvider {
                 }
 
                 print("🎯 WIDGET: Step 2 - Reading from shared container")
-                debugLog += "Reading shared container...\n"
+                debugLog += "Reading from shared container...\n"
                 let allCoupons = try await WidgetAPIClient.shared.getCoupons()
                 debugLog += "Total coupons: \(allCoupons.count)\n"
                 print("🎯 WIDGET: Found \(allCoupons.count) total coupons")
@@ -227,32 +227,32 @@ struct Provider: TimelineProvider {
                 print("🎯 WIDGET: Step 3 - Calculating statistics")
                 let activeCoupons = allCoupons.filter { $0.status == "פעיל" }
                 let activeCouponsCount = activeCoupons.count
-                let totalValue = activeCoupons.reduce(0.0) { $0 + $1.remainingValue }
-                debugLog += "Active: \(activeCouponsCount), Value: ₪\(totalValue)\n"
-                print("🎯 WIDGET: Active coupons = \(activeCouponsCount), Total value = ₪\(totalValue)")
+                let totalValue = activeCoupons.filter { !$0.isOneTime }.reduce(0.0) { $0 + $1.remainingValue }
+                debugLog += "Active: \(activeCouponsCount), Value: ₪\(totalValue) (Corrected)\n"
+                print("🎯 WIDGET: Active coupons = \(activeCouponsCount), Total value = ₪\(totalValue) (Corrected)")
                 
-                print("🎯 WIDGET: Step 4 - Filtering widget coupons")
-                let widgetCoupons = allCoupons.filter { $0.showInWidget == true }
-                debugLog += "Widget coupons: \(widgetCoupons.count)\n"
-                print("🎯 WIDGET: Widget coupons = \(widgetCoupons.count)")
+                print("🎯 WIDGET: Step 4 - Filtering and ordering widget coupons")
+                let widgetCoupons = allCoupons
+                    .filter { $0.showInWidget == true }
+                    .sorted { coupon1, coupon2 in
+                        let order1 = coupon1.widgetDisplayOrder ?? 999
+                        let order2 = coupon2.widgetDisplayOrder ?? 999
+                        return order1 < order2
+                    }
+                debugLog += "Widget coupons: \(widgetCoupons.count) (ordered)\n"
+                print("🎯 WIDGET: Widget coupons = \(widgetCoupons.count) (ordered by display order)")
                 
                 for (index, coupon) in widgetCoupons.enumerated() {
-                    print("🎯 WIDGET Coupon [\(index+1)]: ID=\(coupon.id), Company=\(coupon.company), Status=\(coupon.status), ShowInWidget=\(coupon.showInWidget ?? false)")
-                    debugLog += "W\(index+1): \(coupon.company) (\(coupon.status))\n"
+                    debugLog += "W\(index+1): \(coupon.company) (Order: \(coupon.widgetDisplayOrder ?? 999))\n"
                 }
 
-                print("🎯 WIDGET: Step 5 - Fetching companies")
                 debugLog += "Fetching companies...\n"
                 let companies = try await WidgetAPIClient.shared.getCompanies()
                 debugLog += "Companies: \(companies.count)\n"
-                print("🎯 WIDGET: Found \(companies.count) companies")
                 
-                print("🏢 Companies from API:")
                 for company in companies {
-                    print("   - Name: '\(company.name)' | ImagePath: '\(company.imagePath)'")
                 }
                 
-                print("🎫 Widget Coupons with Logo Matching:")
                 for coupon in widgetCoupons {
                     let normalizedCouponCompany = coupon.company.lowercased().trimmingCharacters(in: .whitespaces)
                     let matchedCompany = companies.first { company in
@@ -344,6 +344,7 @@ struct CouponStatsSmallView: View {
                 let isOneTime: Bool
                 let userId: Int
                 let showInWidget: Bool?
+                let widgetDisplayOrder: Int?
                 
                 var remainingValue: Double {
                     return value - usedValue
@@ -366,7 +367,8 @@ struct CouponStatsSmallView: View {
                     status: shared.status,
                     isOneTime: shared.isOneTime,
                     userId: shared.userId,
-                    showInWidget: shared.showInWidget
+                    showInWidget: shared.showInWidget,
+                    widgetDisplayOrder: shared.widgetDisplayOrder
                 )
             }
         } catch {
@@ -607,7 +609,17 @@ struct CouponCompaniesView: View {
     var entry: Provider.Entry
     
     private var couponsToShow: [WidgetCoupon] {
-        return Array(entry.coupons.prefix(2))
+        let sorted = entry.coupons.sorted { coupon1, coupon2 in
+            let order1 = coupon1.widgetDisplayOrder ?? 999
+            let order2 = coupon2.widgetDisplayOrder ?? 999
+            return order1 < order2
+        }
+        let first2 = Array(sorted.prefix(2))
+        print("🎯 MEDIUM WIDGET: Displaying first 2 coupons in order:")
+        for (index, coupon) in first2.enumerated() {
+            print("   \(index+1). \(coupon.company) (Order: \(coupon.widgetDisplayOrder ?? 999))")
+        }
+        return first2
     }
     
     private var totalActiveValue: Double {
@@ -702,22 +714,13 @@ private struct CompanyLogoView: View {
     private var companyImageURL: URL? {
         let trimmed = logoPath.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        print("🖼️ CompanyLogoView for '\(company)':")
-        print("   - logoPath: '\(logoPath)'")
-        print("   - trimmed: '\(trimmed)'")
-        
         if !trimmed.isEmpty {
             let baseURL = "https://www.couponmasteril.com/static/"
             let fullURL = baseURL + trimmed
-            print("   - Full URL: '\(fullURL)'")
             
             if let url = URL(string: fullURL) {
                 return url
-            } else {
-                print("   ❌ Invalid URL format")
             }
-        } else {
-            print("   ❌ Empty logo path")
         }
         
         return nil
@@ -725,39 +728,16 @@ private struct CompanyLogoView: View {
     
     var body: some View {
         Group {
-            if let url = companyImageURL {
-                AsyncImage(url: url, transaction: Transaction(animation: .easeInOut)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 60, height: 60)
-                            .clipShape(Circle())
-                            .onAppear {
-                                print("✅ Image loaded successfully for '\(company)' from URL: \(url.absoluteString)")
-                            }
-                    case .failure(let error):
-                        fallbackLogo
-                            .onAppear {
-                                print("❌ Image failed to load for '\(company)': \(error.localizedDescription)")
-                                print("   URL was: \(url.absoluteString)")
-                            }
-                    case .empty:
-                        ProgressView()
-                            .frame(width: 60, height: 60)
-                            .onAppear {
-                                print("⏳ Loading image for '\(company)' from URL: \(url.absoluteString)")
-                            }
-                    @unknown default:
-                        fallbackLogo
-                    }
-                }
+            if let url = companyImageURL,
+               let imageData = try? Data(contentsOf: url),
+               let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 60, height: 60)
+                    .clipShape(Circle())
             } else {
                 fallbackLogo
-                    .onAppear {
-                        print("⚠️ No valid URL for '\(company)', showing fallback")
-                    }
             }
         }
         .frame(width: 60, height: 60)
@@ -775,7 +755,6 @@ private struct CompanyLogoView: View {
         }
     }
 }
-
 // MARK: - Medium Coupon Card View
 
 struct CouponMediumCardView: View {
@@ -912,7 +891,15 @@ struct CouponLargeView: View {
     var entry: Provider.Entry
     
     private var couponsToShow: [WidgetCoupon] {
-        let sorted = entry.coupons.sorted { ($0.company) < ($1.company) }
+        let sorted = entry.coupons.sorted { coupon1, coupon2 in
+            let order1 = coupon1.widgetDisplayOrder ?? 999
+            let order2 = coupon2.widgetDisplayOrder ?? 999
+            return order1 < order2
+        }
+        print("🎯 LARGE WIDGET: Displaying \(sorted.count) coupons in order:")
+        for (index, coupon) in sorted.enumerated() {
+            print("   \(index+1). \(coupon.company) (Order: \(coupon.widgetDisplayOrder ?? 999))")
+        }
         return sorted
     }
     
@@ -925,11 +912,7 @@ struct CouponLargeView: View {
         }
         
         let imagePath = company?.imagePath ?? ""
-        
-        print("🖼️ Logo lookup for '\(companyName)':")
-        print("   - Found: \(company != nil)")
-        print("   - Image Path: '\(imagePath)'")
-        
+                
         return imagePath
     }
     
@@ -938,18 +921,58 @@ struct CouponLargeView: View {
     
     var body: some View {
         VStack(spacing: 4) {
-            VStack(alignment: .center, spacing: 2) {
-                Text("קופונים פעילים: \(totalActiveCoupons)")
-                    .couponFont(14, weight: .semibold)
-                    .foregroundColor(.white)
-                    .padding(.top, 4)  // תוספת: רווח מעל "קופונים פעילים"
+            // שורה אחת עם הלוגו בצד שמאל והמידע במרכז
+            HStack(spacing: 12) {
+                // הלוגו בצד שמאל
+                if let uiImage = UIImage(named: "CouponLogo", in: Bundle.main, compatibleWith: nil) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 32, height: 32)
+                        .cornerRadius(8)
+                } else {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color(red: 0.2, green: 0.6, blue: 1.0),
+                                        Color(red: 0.1, green: 0.5, blue: 0.9)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                        
+                        VStack(spacing: 1) {
+                            Text("%")
+                                .couponFont(14, weight: .heavy)
+                                .foregroundColor(.white)
+                            
+                            Text("✂")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                }
                 
-                Text("יתרה: ₪\(Int(totalActiveBalance))")
-                    .couponFont(14, weight: .medium)
-                    .foregroundColor(.white)
+                // הטקסט במרכז
+                VStack(alignment: .center, spacing: 2) {
+                    Text("קופונים פעילים: \(totalActiveCoupons)")
+                        .couponFont(14, weight: .semibold)
+                        .foregroundColor(.white)
+                    
+                    Text("יתרה: ₪\(Int(totalActiveBalance))")
+                        .couponFont(14, weight: .medium)
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+                
+                Spacer()
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
             
             Rectangle()
                 .fill(Color.primary.opacity(0.08))
@@ -980,7 +1003,7 @@ struct CouponLargeView: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
         }
-        .padding(.top, 8)  // תוספת: מזיז את כל התוכן למטה
+        .padding(.top, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .widgetBackground(Color.clear)
     }

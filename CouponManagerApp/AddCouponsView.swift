@@ -602,7 +602,8 @@ extension CouponCreateRequest {
                 telegramMonthlySummary: true,
                 newsletterImage: nil,
                 showWhatsappBanner: false,
-                faceIdEnabled: false
+                faceIdEnabled: false,
+                pushToken: nil
             ),
             companies: [
                 Company(id: 1, name: "Carrefour", imagePath: "carrefour.png", companyCount: 5),

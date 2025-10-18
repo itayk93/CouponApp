@@ -34,6 +34,7 @@ struct Coupon: Codable, Identifiable, Equatable {
     let cvv: String?
     let cardExp: String?
     var showInWidget: Bool?
+    var widgetDisplayOrder: Int?
     
     enum CodingKeys: String, CodingKey {
         case id, code, description, value, cost, company, expiration, source, status, purpose, cvv
@@ -51,6 +52,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         case userId = "user_id"
         case cardExp = "card_exp"
         case showInWidget = "show_in_widget"
+        case widgetDisplayOrder = "widget_display_order"
     }
     
     // Memberwise initializer
@@ -79,7 +81,8 @@ struct Coupon: Codable, Identifiable, Equatable {
         userId: Int,
         cvv: String?,
         cardExp: String?,
-        showInWidget: Bool? = nil
+        showInWidget: Bool? = nil,
+        widgetDisplayOrder: Int? = nil
     ) {
         self.id = id
         self.code = code
@@ -106,6 +109,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         self.cvv = cvv
         self.cardExp = cardExp
         self.showInWidget = showInWidget
+        self.widgetDisplayOrder = widgetDisplayOrder
     }
     
     // Custom decoder to handle usedValue as both String and Double
@@ -198,6 +202,9 @@ struct Coupon: Codable, Identifiable, Equatable {
         } else {
             showInWidget = nil
         }
+        
+        // Handle widget_display_order
+        widgetDisplayOrder = try container.decodeIfPresent(Int.self, forKey: .widgetDisplayOrder)
     }
     
     // Custom encoder
@@ -229,6 +236,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         try container.encodeIfPresent(cvv, forKey: .cvv)
         try container.encodeIfPresent(cardExp, forKey: .cardExp)
         try container.encodeIfPresent(showInWidget, forKey: .showInWidget)
+        try container.encodeIfPresent(widgetDisplayOrder, forKey: .widgetDisplayOrder)
     }
     
     // Equatable conformance

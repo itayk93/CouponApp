@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct CouponManagerAppApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
         WindowGroup {
             ContentView()  // מסך ראשי שמנהל את ההתחברות ומעבר לאפליקציה
@@ -21,6 +23,12 @@ struct CouponManagerAppApp: App {
     private func handleDeepLink(url: URL) {
         // Handle widget deep links (company filters and coupon detail)
         if url.scheme == "couponmanager" || url.scheme == "couponmaster" {
+            // Home screen deep link
+            if url.host == "home" {
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateToHome"), object: nil)
+                return
+            }
+
             // Company filter links: couponmanager://company-filter/<company>
             if url.host == "company-filter", let companyEncoded = url.pathComponents.last,
                let company = companyEncoded.removingPercentEncoding {

@@ -16,6 +16,7 @@ struct WidgetCoupon: Codable, Identifiable {
     let isOneTime: Bool
     let userId: Int
     var showInWidget: Bool?
+    var widgetDisplayOrder: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, code, description, value, cost, company, expiration, status
@@ -24,10 +25,11 @@ struct WidgetCoupon: Codable, Identifiable {
         case isOneTime = "is_one_time"
         case userId = "user_id"
         case showInWidget = "show_in_widget"
+        case widgetDisplayOrder = "widget_display_order"
     }
     
     // Memberwise initializer
-    init(id: Int, code: String, description: String?, value: Double, cost: Double, company: String, expiration: String?, dateAdded: String?, usedValue: Double, status: String, isOneTime: Bool, userId: Int, showInWidget: Bool?) {
+    init(id: Int, code: String, description: String?, value: Double, cost: Double, company: String, expiration: String?, dateAdded: String?, usedValue: Double, status: String, isOneTime: Bool, userId: Int, showInWidget: Bool?, widgetDisplayOrder: Int? = nil) {
         self.id = id
         self.code = code
         self.description = description
@@ -41,6 +43,7 @@ struct WidgetCoupon: Codable, Identifiable {
         self.isOneTime = isOneTime
         self.userId = userId
         self.showInWidget = showInWidget
+        self.widgetDisplayOrder = widgetDisplayOrder
     }
     
     // Custom decoder to handle various type mismatches from API
@@ -136,6 +139,10 @@ struct WidgetCoupon: Codable, Identifiable {
         }
         
         print("   🎯 FINAL showInWidget value: \(showInWidget ?? false)")
+        
+        // Handle widget_display_order
+        widgetDisplayOrder = try container.decodeIfPresent(Int.self, forKey: .widgetDisplayOrder)
+        print("   🔢 WIDGET ORDER for ID:\(id) - Raw: \(widgetDisplayOrder ?? -1), Final: \(widgetDisplayOrder ?? 999)")
     }
     
     var remainingValue: Double {

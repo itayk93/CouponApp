@@ -17,6 +17,7 @@ struct ProfileView: View {
     @State private var faceIDAlertMessage = ""
     @State private var isLoading = false
     @State private var showingAdminSettings = false
+    @State private var showingWidgetManagement = false
     private let apiClient = APIClient()
     @StateObject private var faceIDManager = FaceIDManager.shared
     
@@ -54,10 +55,16 @@ struct ProfileView: View {
                 Button("אישור", role: .cancel) { }
             } message: {
                 Text(faceIDAlertMessage)
+                    .multilineTextAlignment(.trailing)
             }
             .sheet(isPresented: $showingAdminSettings) {
                 AdminSettingsView(user: user) {
                     showingAdminSettings = false
+                }
+            }
+            .sheet(isPresented: $showingWidgetManagement) {
+                WidgetCouponsOrderingView(user: user) {
+                    // Handle any updates if needed
                 }
             }
         }
@@ -245,6 +252,37 @@ struct ProfileView: View {
             .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
             
             // Other Settings Card
+            // Widget Management Card
+            ProfileInfoCard(title: "ניהול ווידג'ט", icon: "square.grid.2x2.fill") {
+                VStack(spacing: 12) {
+                    Button(action: {
+                        showingWidgetManagement = true
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                .font(.title3)
+                            Text("סידור קופונים בווידג'ט")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            Image(systemName: "arrow.left")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .foregroundColor(primaryBlue)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(primaryBlue.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    Text("בחר עד 4 קופונים וקבע את סדר הופעתם בווידג'ט")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            
             ProfileInfoCard(title: "הגדרות כלליות", icon: "gear.circle.fill") {
                 VStack(spacing: 8) {
                     InfoRow(label: "ניוזלטר", value: user.newsletterSubscription ? "✅ מנוי" : "❌ לא מנוי")
@@ -380,7 +418,8 @@ struct InfoRow: View {
             telegramMonthlySummary: true,
             newsletterImage: nil,
             showWhatsappBanner: false,
-            faceIdEnabled: false
+            faceIdEnabled: false,
+            pushToken: nil
         ),
         onLogout: {}
     )

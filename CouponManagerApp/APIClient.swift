@@ -66,4 +66,31 @@ class APIClient {
             }
         }.resume()
     }
+    
+    func updateUserPushToken(userId: Int, token: String) async throws {
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/users?id=eq.\(userId)") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(supabaseKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseKey, forHTTPHeaderField: "apikey")
+        
+        let requestBody: [String: String] = ["push_token": token]
+        request.httpBody = try JSONEncoder().encode(requestBody)
+        
+        print("🔗 Updating push token for user \(userId) at: \(url.absoluteString)")
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 {
+            print("✅ Successfully updated push token for user \(userId)")
+        } else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("❌ Failed to update push token for user \(userId). Status code: \(statusCode)")
+            throw URLError(.badServerResponse)
+        }
+    }
 }

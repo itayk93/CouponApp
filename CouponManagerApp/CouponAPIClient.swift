@@ -137,7 +137,7 @@ class CouponAPIClient: ObservableObject {
     // MARK: - Fetch User Total Value
     func fetchUserTotalValue(userId: Int, completion: @escaping (Result<Double, Error>) -> Void) {
         // Try direct aggregation query first (more reliable than RPC)
-        let urlString = "\(baseURL)/rest/v1/coupon?user_id=eq.\(userId)&select=value,used_value,is_for_sale,exclude_saving"
+        let urlString = "\(baseURL)/rest/v1/coupon?user_id=eq.\(userId)&select=value,used_value,is_for_sale,exclude_saving,is_one_time"
         
         guard let url = URL(string: urlString) else {
             completion(.failure(URLError(.badURL)))
@@ -175,9 +175,10 @@ class CouponAPIClient: ObservableObject {
                         let usedValue = couponData["used_value"] as? Double ?? 0.0
                         let isForSale = couponData["is_for_sale"] as? Bool ?? false
                         let excludeSaving = couponData["exclude_saving"] as? Bool ?? false
+                        let isOneTime = couponData["is_one_time"] as? Bool ?? false
                         
-                        // Apply same filtering as web and iOS
-                        if !isForSale && !excludeSaving {
+                        // Apply same filtering as web and iOS - exclude one-time coupons
+                        if !isForSale && !excludeSaving && !isOneTime {
                             let remaining = max(value - usedValue, 0.0)
                             totalRemaining += remaining
                         }
@@ -702,26 +703,22 @@ class CouponAPIClient: ObservableObject {
     
     // MARK: - Mark Coupon as Used
     func markCouponAsUsed(couponId: Int, completion: @escaping (Result<Void, Error>) -> Void) {
-        let urlString = "\(baseURL)/rest/v1/coupon?id=eq.\(couponId)"
+        let urlString = "\(baseURL)/rest/v1/rpc/mark_coupon_as_used_rpc"
         
         guard let url = URL(string: urlString) else {
             completion(.failure(URLError(.badURL)))
             return
         }
         
-        // Mark coupon as fully used by setting used_value equal to value
-        let updateData = [
-            "used_value": "value",
-            "status": "נוצל"
-        ]
+        let parameters = ["p_coupon_id": couponId]
         
-        guard let requestData = try? JSONSerialization.data(withJSONObject: updateData) else {
-            completion(.failure(NSError(domain: "CouponAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize coupon update data"])))
+        guard let requestData = try? JSONSerialization.data(withJSONObject: parameters) else {
+            completion(.failure(NSError(domain: "CouponAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize RPC parameters"])))
             return
         }
         
         var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
+        request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
@@ -731,6 +728,14 @@ class CouponAPIClient: ObservableObject {
             if let error = error {
                 DispatchQueue.main.async {
                     completion(.failure(error))
+                }
+                return
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+                let message = String(data: data ?? Data(), encoding: .utf8) ?? "Unknown RPC error"
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "CouponAPI", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Server RPC error: \(message)"])))
                 }
                 return
             }
@@ -827,8 +832,8 @@ class CouponAPIClient: ObservableObject {
     
     // MARK: - Fetch Consolidated Transaction Rows
     func fetchConsolidatedTransactionRows(couponId: Int, completion: @escaping (Result<[TransactionRow], Error>) -> Void) {
-        // Call the new API endpoint that matches the web version exactly
-        let urlString = "\(Config.pythonServerURL)/api/coupon_detail/\(couponId)"
+        // Call the Supabase RPC function `get_consolidated_transactions`
+        let urlString = "\(baseURL)/rest/v1/rpc/get_consolidated_transactions"
         
         guard let url = URL(string: urlString) else {
             completion(.failure(URLError(.badURL)))
@@ -836,108 +841,73 @@ class CouponAPIClient: ObservableObject {
         }
         
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Add user authentication header - get current user ID
-        if let currentUser = getCurrentUser() {
-            request.setValue("\(currentUser.id)", forHTTPHeaderField: "X-User-ID")
-        }
-        
-        print("🔄 Fetching consolidated transaction rows from API for coupon \(couponId)")
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("❌ API call failed, falling back to simple data: \(error)")
-                // Fallback: create a simple summary row
-                self.createFallbackTransactionData(couponId: couponId, completion: completion)
-                return
-            }
-            
-            guard let data = data else {
-                print("❌ No data received, falling back to simple data")
-                self.createFallbackTransactionData(couponId: couponId, completion: completion)
-                return
-            }
-            
-            do {
-                // First, let's see what we got from the server
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("📄 Raw API response data: \(jsonString)")
-                }
-                
-                // Decode the API response structure
-                struct APIResponse: Codable {
-                    let success: Bool
-                    let consolidated_rows: [TransactionRow]?
-                    let error: String?
-                }
-                
-                let apiResponse = try JSONDecoder().decode(APIResponse.self, from: data)
-                
-                if apiResponse.success, let rows = apiResponse.consolidated_rows {
-                    DispatchQueue.main.async {
-                        print("✅ Successfully fetched \(rows.count) consolidated transaction rows from API")
-                        for (index, row) in rows.enumerated() {
-                            print("   API Row \(index): \(row.sourceTable) | Amount: \(row.transactionAmount) | Details: \(row.details ?? "nil")")
-                        }
-                        completion(.success(rows))
-                    }
-                } else {
-                    print("❌ API returned error: \(apiResponse.error ?? "unknown error")")
-                    print("⚠️ Falling back to simple data")
-                    self.createFallbackTransactionData(couponId: couponId, completion: completion)
-                }
-            } catch {
-                print("❌ Failed to decode API response: \(error)")
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("📄 Error - Response data: \(jsonString)")
-                }
-                print("⚠️ Falling back to simple data")
-                self.createFallbackTransactionData(couponId: couponId, completion: completion)
-            }
-        }.resume()
-    }
-    
-    // MARK: - Create Fallback Transaction Data
-    private func createFallbackTransactionData(couponId: Int, completion: @escaping (Result<[TransactionRow], Error>) -> Void) {
-        // Get coupon data to create a basic summary
-        let urlString = "\(baseURL)/rest/v1/coupon?id=eq.\(couponId)&select=*"
-        
-        guard let url = URL(string: urlString) else {
-            completion(.failure(URLError(.badURL)))
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
         
+        // Set the parameters for the RPC call
+        let parameters = ["coupon_id_param": couponId]
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+        
+        print("🔄 Calling Supabase RPC 'get_consolidated_transactions' for coupon \(couponId)")
+        
         URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                guard let data = data,
-                      let coupons = try? JSONDecoder().decode([Coupon].self, from: data),
-                      let coupon = coupons.first else {
-                    completion(.success([]))
-                    return
+            if let error = error {
+                print("❌ RPC call failed with network error: \(error)")
+                DispatchQueue.main.async {
+                    completion(.failure(error))
                 }
-                
-                // Create a simple summary row showing remaining balance
-                let remainingBalance = coupon.value - coupon.usedValue
-                let summaryRow = TransactionRow(
-                    sourceTable: "sum_row",
-                    id: nil,
-                    couponId: couponId,
-                    timestamp: nil,
-                    transactionAmount: remainingBalance,
-                    details: "יתרה בקופון",
-                    action: nil
-                )
-                
-                print("📊 Created fallback transaction data: ₪\(remainingBalance) remaining")
-                completion(.success([summaryRow]))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid response from server.")
+                DispatchQueue.main.async {
+                    completion(.failure(URLError(.badServerResponse)))
+                }
+                return
+            }
+            
+            guard let data = data else {
+                print("❌ No data received from RPC call")
+                DispatchQueue.main.async {
+                    completion(.failure(URLError(.badServerResponse)))
+                }
+                return
+            }
+            
+            // Check for non-successful HTTP status codes
+            if !(200...299).contains(httpResponse.statusCode) {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown server error"
+                print("❌ RPC call failed with status [\(httpResponse.statusCode)]: \(errorMessage)")
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "SupabaseAPI", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])))
+                }
+                return
+            }
+            
+            // Debug: Print raw response
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("📄 Raw RPC response data: \(jsonString.prefix(1000))")
+            }
+            
+            do {
+                let rows = try JSONDecoder().decode([TransactionRow].self, from: data)
+                DispatchQueue.main.async {
+                    print("✅ Successfully fetched \(rows.count) consolidated transaction rows from Supabase RPC")
+                    completion(.success(rows))
+                }
+            } catch {
+                print("❌ Failed to decode RPC response: \(error)")
+                DispatchQueue.main.async {
+                    completion(.failure(error))
+                }
             }
         }.resume()
     }

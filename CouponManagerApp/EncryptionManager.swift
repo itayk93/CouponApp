@@ -17,15 +17,11 @@ class EncryptionManager {
         // בדוק אם המחרוזת מוצפנת (מתחילה ב-gAAAAA)
         guard encryptedString.starts(with: "gAAAAA") else {
             // אם לא מוצפנת, החזר כמו שהיא
-            print("🔓 String not encrypted (doesn't start with gAAAAA): \(String(encryptedString.prefix(20)))...")
             return encryptedString
         }
         
-        print("🔐 Attempting to decrypt: \(String(encryptedString.prefix(50)))...")
         let result = fernetDecrypt(encryptedString)
-        if let result = result {
-            //print("✅ Decryption successful: \(String(result.prefix(50)))...")
-        } else {
+        if result == nil {
             print("❌ Decryption failed for: \(String(encryptedString.prefix(50)))...")
         }
         return result
@@ -41,8 +37,6 @@ class EncryptionManager {
     // MARK: - Fernet Implementation - תיקון מלא
     
     private static func fernetDecrypt(_ encryptedString: String) -> String? {
-        print("🔍 Starting Fernet decryption...")
-        
         // פענוח Base64 URL-safe
         var base64String = encryptedString
             .replacingOccurrences(of: "-", with: "+")
@@ -58,8 +52,6 @@ class EncryptionManager {
             print("❌ Failed to decode base64: \(encryptedString)")
             return nil
         }
-        
-        print("📊 Encrypted data length: \(encryptedData.count)")
         
         // וודא שהמידע מספיק ארוך עבור Fernet: version(1) + timestamp(8) + iv(16) + ciphertext + hmac(32)
         guard encryptedData.count >= 57 else {
@@ -79,8 +71,6 @@ class EncryptionManager {
         let hmac = encryptedData.suffix(32)
         let ciphertext = encryptedData[25..<(encryptedData.count-32)]
         
-        print("🔑 IV: \(iv.count) bytes, Ciphertext: \(ciphertext.count) bytes, HMAC: \(hmac.count) bytes")
-        
         // קבל את המפתח הבסיסי - המפתח עצמו הוא URL-safe base64
         var keyBase64 = encryptionKey
             .replacingOccurrences(of: "-", with: "+")
@@ -95,19 +85,12 @@ class EncryptionManager {
         guard let keyData = Data(base64Encoded: keyBase64),
               keyData.count == 32 else {
             print("❌ Invalid encryption key length. Expected 32 bytes, got \(Data(base64Encoded: keyBase64)?.count ?? 0)")
-            print("🔍 Original key: \(encryptionKey)")
-            print("🔍 Converted key: \(keyBase64)")
             return nil
         }
-        
-        print("✅ Key loaded successfully: 32 bytes")
         
         // חלק את המפתח כמו ב-Fernet האמיתי: 16 bytes ראשונים לSigning, 16 אחרונים לEncryption
         let signingKey = keyData[0..<16]     // 16 bytes ראשונים לHMAC
         let encryptionKey = keyData[16..<32] // 16 bytes אחרונים לAES
-        
-        //print("🔑 Signing key: \(signingKey.count) bytes")
-        //print("🔑 Encryption key: \(encryptionKey.count) bytes")
         
         // בדוק HMAC-SHA256 עם מפתח הSigning בלבד (לא כל המפתח!)
         let message = encryptedData[0..<(encryptedData.count-32)]
@@ -115,12 +98,8 @@ class EncryptionManager {
         
         guard Data(computedHmac) == hmac else {
             print("❌ HMAC verification failed")
-            print("🔍 Expected HMAC: \(hmac.map { String(format: "%02x", $0) }.joined())")
-            print("🔍 Computed HMAC: \(Data(computedHmac).map { String(format: "%02x", $0) }.joined())")
             return nil
         }
-        
-        print("✅ HMAC verification passed")
         
         // פענח באמצעות AES-128-CBC עם מפתח הEncryption בלבד (16 bytes אחרונים)
         let decryptedData = decryptAES128CBC(data: Data(ciphertext), key: Data(encryptionKey), iv: Data(iv))
@@ -288,18 +267,13 @@ class EncryptionManager {
 
 extension EncryptionManager {
     static func testEncryptionDecryption() {
-        print("🧪 Testing encryption/decryption...")
-        
         let testString = "This is a test string for encryption"
-        print("📝 Original: \(testString)")
         
         // Test encryption
         let encrypted = encryptString(testString)
-        print("🔐 Encrypted: \(encrypted)")
         
         // Test decryption
         let decrypted = decryptString(encrypted)
-        print("🔓 Decrypted: \(decrypted ?? "nil")")
         
         if decrypted == testString {
             print("✅ Test passed!")

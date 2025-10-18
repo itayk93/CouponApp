@@ -34,6 +34,7 @@ struct CouponsListView: View {
     @State private var showingSavingsReport = false
     @State private var showingProfile = false
     @State private var selectedCouponForDetail: Coupon? = nil
+    @State private var viewId = UUID()
     @State private var expiringCoupons: [Coupon] = []
     @State private var selectedCompanyFromWidget: String? = nil
     
@@ -176,6 +177,7 @@ struct CouponsListView: View {
                 QuickUsageReportView(
                     user: user,
                     coupons: coupons.filter { !$0.isForSale && $0.status == "פעיל" && !$0.isExpired },
+                    allCompanies: companies,
                     onUsageReported: {
                         loadData()
                     }
@@ -203,6 +205,7 @@ struct CouponsListView: View {
     
     private var withEventHandlers: some View {
         withSheetPresentations
+            .id(viewId)
             .onAppear {
                 if coupons.isEmpty {
                     loadData()
@@ -212,6 +215,20 @@ struct CouponsListView: View {
                 // Ensure user data is saved to shared container every time the app appears
                 print("🔐 APP: CouponsListView appeared - ensuring user data is saved to shared container")
                 AppGroupManager.shared.saveCurrentUserToSharedContainer(user)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToHome"))) { _ in
+                // Dismiss any open sheets
+                showingAddCoupon = false
+                showingQuickAddSheet = false
+                showingImageAnalysis = false
+                showingFilterSheet = false
+                showingQuickUsageReport = false
+                showingSavingsReport = false
+                showingProfile = false
+                selectedCouponForDetail = nil
+                
+                // Reset navigation by changing the view's ID
+                viewId = UUID()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToCouponDetail"))) { notification in
                 if let couponId = notification.userInfo?["couponId"] as? Int,
@@ -574,7 +591,6 @@ struct CouponsListView: View {
             !coupon.isForSale &&
             !coupon.excludeSaving &&
             coupon.status == "פעיל" &&
-            !coupon.isOneTime &&
             !coupon.isExpired &&
             !coupon.isFullyUsed
         }
@@ -621,7 +637,7 @@ struct CouponsListView: View {
                 
                 // Calculate total value from all coupons if needed
                 if self.totalRemainingValue == 0.0 {
-                    let filteredCoupons = fetchedCoupons.filter { !$0.isForSale && !$0.excludeSaving }
+                    let filteredCoupons = fetchedCoupons.filter { !$0.isForSale && !$0.excludeSaving && !$0.isOneTime }
                     self.totalRemainingValue = filteredCoupons.reduce(0) { $0 + $1.remainingValue }
                     print("🔄 Calculated total from all coupons: ₪\(self.totalRemainingValue)")
                 }
@@ -657,7 +673,7 @@ struct CouponsListView: View {
                 case .failure(let error):
                     print("❌ Failed to load total value: \(error)")
                     // Fallback to calculating from loaded coupons if API fails
-                    let filteredCoupons = self.coupons.filter { !$0.isForSale && !$0.excludeSaving }
+                    let filteredCoupons = self.coupons.filter { !$0.isForSale && !$0.excludeSaving && !$0.isOneTime }
                     self.totalRemainingValue = filteredCoupons.reduce(0) { $0 + $1.remainingValue }
                     print("🔄 Using fallback calculation: ₪\(self.totalRemainingValue)")
                 }
@@ -750,7 +766,7 @@ struct CouponsListView: View {
             // Show all coupons (already filtered for for_sale and exclude_saving above)
             break
         case .active:
-            filtered = filtered.filter { $0.status == "פעיל" && !$0.isOneTime && !$0.isExpired && !$0.isFullyUsed }
+            filtered = filtered.filter { $0.status == "פעיל" && !$0.isExpired && !$0.isFullyUsed }
         case .expired:
             filtered = filtered.filter { $0.isExpired }
         case .fullyUsed:
@@ -1358,7 +1374,8 @@ struct ActionButton: View {
             telegramMonthlySummary: true,
             newsletterImage: nil,
             showWhatsappBanner: false,
-            faceIdEnabled: false
+            faceIdEnabled: false,
+            pushToken: nil
         ),
         onLogout: nil
     )

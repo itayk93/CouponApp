@@ -289,7 +289,8 @@ struct WidgetCouponRow: View {
             telegramMonthlySummary: false,
             newsletterImage: nil,
             showWhatsappBanner: false,
-            faceIdEnabled: false
+            faceIdEnabled: false,
+            pushToken: nil
         ),
         onUpdate: {}
     )

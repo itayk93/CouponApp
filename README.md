@@ -1,3 +1,32 @@
+# CouponManagerApp — Quick Usage with GPT-4o-mini
+
+This adds a "Quick Usage Report" screen that analyzes pasted text to suggest which of your active coupons were used, using OpenAI gpt-4o-mini.
+
+## Files added
+- Models/CouponSuggestion.swift
+- Services/AIQuickUsageService.swift
+- ViewModels/QuickUsageViewModel.swift
+- Views/QuickUsageView.swift
+
+## Configure OpenAI API key
+Provide the key in one of the following:
+- Environment variable: OPENAI_API_KEY
+- Info.plist via xcconfig key `OPENAI_API_KEY` (Config.xcconfig -> Info.plist)
+
+## Wiring into your app
+Instantiate QuickUsageView and provide two closures:
+- loadActiveCoupons: () -> [Coupon]
+- reportUsage: (_ couponIds: [String]) async throws -> Void
+
+Example:
+```
+QuickUsageView(
+  reportUsage: { ids in /* call your usage reporting flow */ },
+  loadActiveCoupons: { /* return current active coupons */ }
+)
+```
+
+The AI service uses chat/completions with response_format json_object and model gpt-4o-mini only.
 # 🎟️ CouponApp
 
 A modern iOS application for managing and organizing digital coupons with advanced features including AI-powered coupon extraction, widgets, and smart notifications.

@@ -748,7 +748,8 @@ extension Coupon {
             telegramMonthlySummary: true,
             newsletterImage: nil,
             showWhatsappBanner: false,
-            faceIdEnabled: false
+            faceIdEnabled: false,
+            pushToken: nil
         ),
         coupons: []
     )

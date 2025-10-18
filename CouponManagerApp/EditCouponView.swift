@@ -178,6 +178,7 @@ struct EditCouponView: View {
                 }
             } message: {
                 Text(errorMessage)
+                    .multilineTextAlignment(.trailing)
             }
             .alert("הצלחה", isPresented: .constant(!successMessage.isEmpty)) {
                 Button("OK") {
@@ -186,6 +187,7 @@ struct EditCouponView: View {
                 }
             } message: {
                 Text(successMessage)
+                    .multilineTextAlignment(.trailing)
             }
             .onAppear {
                 loadCompaniesFromAPI()
@@ -731,74 +733,34 @@ struct EditCouponView: View {
         let valueAmount = Double(value) ?? 0
         let discountValue = Double(discountPercentage) ?? 0
         
-        // Count filled fields
-        var filledCount = 0
-        if costValue > 0 { filledCount += 1 }
-        if valueAmount > 0 { filledCount += 1 }
-        if discountValue > 0 && discountValue <= 100 { filledCount += 1 }
-        
-        // Special case: cost is 0 and value is positive, set discount to 100%
-        if costValue == 0 && valueAmount > 0 {
-            discountPercentage = "100.00"
-            return
-        }
-        
-        // Only calculate if we have exactly 2 fields
-        if filledCount == 2 {
-            switch changedField {
-            case "cost":
-                if discountValue > 0 && discountValue <= 100 && valueAmount > 0 {
-                    // Calculate discount from cost and value
-                    if costValue == 0 {
-                        discountPercentage = "100.00"
-                    } else {
-                        let calculatedDiscount = ((valueAmount - costValue) / valueAmount * 100)
-                        discountPercentage = String(format: "%.2f", max(0, calculatedDiscount))
-                    }
-                } else if costValue > 0 && discountValue > 0 && discountValue <= 100 {
-                    // Calculate value from cost and discount
-                    if discountValue == 100 {
-                        value = String(format: "%.2f", costValue * 100)
-                    } else {
-                        value = String(format: "%.2f", costValue / (1 - discountValue / 100))
-                    }
+        switch changedField {
+        case "cost", "value":
+            // Always calculate discount when cost or value changes (if both have values)
+            if valueAmount > 0 {
+                if costValue == 0 {
+                    discountPercentage = "100.00"
+                } else if costValue <= valueAmount {
+                    let calculatedDiscount = ((valueAmount - costValue) / valueAmount) * 100
+                    discountPercentage = String(format: "%.2f", max(0, min(100, calculatedDiscount)))
+                } else {
+                    // Cost is higher than value - set discount to 0
+                    discountPercentage = "0.00"
                 }
-                
-            case "value":
-                if costValue >= 0 && discountValue > 0 && discountValue <= 100 {
-                    // Calculate discount from cost and value
-                    if costValue == 0 {
-                        discountPercentage = "100.00"
-                    } else {
-                        let calculatedDiscount = ((valueAmount - costValue) / valueAmount * 100)
-                        discountPercentage = String(format: "%.2f", max(0, calculatedDiscount))
-                    }
-                } else if costValue > 0 && valueAmount > 0 {
-                    // Calculate discount from cost and value
-                    let calculatedDiscount = ((valueAmount - costValue) / valueAmount * 100)
-                    discountPercentage = String(format: "%.2f", max(0, calculatedDiscount))
-                }
-                
-            case "discount":
-                if costValue >= 0 && valueAmount > 0 {
-                    // Calculate cost from value and discount
-                    if discountValue == 100 {
-                        cost = "0.00"
-                    } else {
-                        cost = String(format: "%.2f", valueAmount * (1 - discountValue / 100))
-                    }
-                } else if costValue > 0 && discountValue > 0 && discountValue <= 100 {
-                    // Calculate value from cost and discount
-                    if discountValue == 100 {
-                        value = String(format: "%.2f", costValue * 100)
-                    } else {
-                        value = String(format: "%.2f", costValue / (1 - discountValue / 100))
-                    }
-                }
-                
-            default:
-                break
             }
+            
+        case "discount":
+            // Calculate cost from value and discount
+            if valueAmount > 0 && discountValue >= 0 && discountValue <= 100 {
+                if discountValue == 100 {
+                    cost = "0.00"
+                } else {
+                    let calculatedCost = valueAmount * (1 - discountValue / 100)
+                    cost = String(format: "%.2f", max(0, calculatedCost))
+                }
+            }
+            
+        default:
+            break
         }
     }
 }

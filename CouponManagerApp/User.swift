@@ -33,6 +33,7 @@ struct User: Codable {
     let newsletterImage: String?
     let showWhatsappBanner: Bool
     let faceIdEnabled: Bool?
+    let pushToken: String?
     
     enum CodingKeys: String, CodingKey {
         case id, email, password, age, gender, region, slots
@@ -54,5 +55,6 @@ struct User: Codable {
         case newsletterImage = "newsletter_image"
         case showWhatsappBanner = "show_whatsapp_banner"
         case faceIdEnabled = "face_id_enabled"
+        case pushToken = "push_token"
     }
 }

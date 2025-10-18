@@ -1,0 +1,27 @@
+name: Daily Notification Check
+on:
+  schedule:
+    # Run daily at 20:14 UTC (adjust timezone as needed)
+    - cron: '14 20 * * *'
+  workflow_dispatch: # Allow manual trigger
+jobs:
+  send-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Daily Notifications
+        env:
+          SUPABASE_URL: ${{ secrets.NOTIFICATIONS_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.NOTIFICATIONS_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "Error: NOTIFICATIONS_SUPABASE_URL secret is not set"
+            exit 1
+          fi
+          
+          curl -X POST \
+            "${SUPABASE_URL}/functions/v1/send-daily-notifications" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+      - name: Log result
+        run: echo "Daily notification check completed at $(date)"

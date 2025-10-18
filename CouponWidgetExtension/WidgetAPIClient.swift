@@ -19,7 +19,7 @@ class WidgetAPIClient {
         }
         
         // Fetch ALL coupons for user (not just active ones)
-        let urlString = "\(SupabaseConfig.url)/rest/v1/coupon?user_id=eq.\(userId)&select=status,value,used_value,is_for_sale,exclude_saving"
+        let urlString = "\(SupabaseConfig.url)/rest/v1/coupon?user_id=eq.\(userId)&select=status,value,used_value,is_for_sale,exclude_saving,is_one_time"
         
         guard let url = URL(string: urlString) else {
             throw APIError.invalidURL
@@ -50,14 +50,15 @@ class WidgetAPIClient {
             let usedValue = couponData["used_value"] as? Double ?? 0.0
             let isForSale = couponData["is_for_sale"] as? Bool ?? false
             let excludeSaving = couponData["exclude_saving"] as? Bool ?? false
+            let isOneTime = couponData["is_one_time"] as? Bool ?? false
             
             // Count active coupons
             if status == "פעיל" {
                 activeCouponsCount += 1
             }
             
-            // Calculate total remaining value (same logic as main app)
-            if !isForSale && !excludeSaving {
+            // Calculate total remaining value (same logic as main app - exclude one-time coupons)
+            if !isForSale && !excludeSaving && !isOneTime {
                 let remaining = max(value - usedValue, 0.0)
                 totalRemainingValue += remaining
             }
@@ -131,7 +132,6 @@ class WidgetAPIClient {
             throw APIError.invalidResponse
         }
         
-        print("✅ WIDGET API: Found \(data.count) bytes of data in shared container")
         
         // Try to decode as AppGroupManager.WidgetCoupon first (correct format)
         do {
@@ -152,6 +152,7 @@ class WidgetAPIClient {
                 let isOneTime: Bool
                 let userId: Int
                 let showInWidget: Bool?
+                let widgetDisplayOrder: Int?
                 
                 var remainingValue: Double {
                     return value - usedValue
@@ -159,10 +160,8 @@ class WidgetAPIClient {
             }
             
             let sharedCoupons = try JSONDecoder().decode([SharedCoupon].self, from: data)
-            print("✅ WIDGET API: Successfully decoded \(sharedCoupons.count) coupons from shared container")
             
             // Convert to WidgetCoupon format
-            print("🎯 WIDGET API: Converting to WidgetCoupon format...")
             let widgetCoupons = sharedCoupons.map { shared in
                 WidgetCoupon(
                     id: shared.id,
@@ -177,7 +176,8 @@ class WidgetAPIClient {
                     status: shared.status,
                     isOneTime: shared.isOneTime,
                     userId: shared.userId,
-                    showInWidget: shared.showInWidget
+                    showInWidget: shared.showInWidget,
+                    widgetDisplayOrder: shared.widgetDisplayOrder
                 )
             }
             
@@ -196,13 +196,10 @@ class WidgetAPIClient {
                 print("   🎯 Widget Coupon [\(index + 1)]: ID=\(coupon.id) | Company=\(coupon.company) | Status=\(coupon.status) | ShowInWidget=\(coupon.showInWidget ?? false)")
             }
             
-            print("✅ WIDGET API: Returning \(widgetCoupons.count) coupons")
             return widgetCoupons
             
         } catch {
-            print("❌ WIDGET API: Failed to decode shared container data: \(error)")
             if let jsonString = String(data: data, encoding: .utf8) {
-                print("📄 WIDGET API: Raw data (first 500 chars): \(jsonString.prefix(500))")
             }
             throw error
         }
@@ -499,7 +496,6 @@ class WidgetAPIClient {
         // Fallback to standard UserDefaults
         print("⚠️ WIDGET API: No user in shared container, trying standard UserDefaults")
         if let userId = getUserIdFromStandardDefaults() {
-            print("✅ WIDGET API: Found user ID in standard UserDefaults: \(userId)")
             return userId
         }
         
@@ -508,7 +504,6 @@ class WidgetAPIClient {
     }
     
     private func getUserIdFromSharedContainer() -> Int? {
-        print("🎯 WIDGET API: getUserIdFromSharedContainer called")
         
         guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) else {
             print("❌ WIDGET API: Failed to get UserDefaults for app group: \(appGroupIdentifier)")
@@ -524,19 +519,14 @@ class WidgetAPIClient {
         
         // Let's check all keys and their values for debugging
         let allKeys = sharedDefaults.dictionaryRepresentation()
-        print("🎯 WIDGET API: All keys and values in shared container:")
         for (key, value) in allKeys.sorted(by: { $0.key < $1.key }) {
             if key == "lastLoggedInUser" {
                 if let data = value as? Data {
-                    print("   📍 \(key): Data(\(data.count) bytes)")
                     if let jsonString = String(data: data, encoding: .utf8) {
-                        print("   📄 Raw JSON: \(jsonString)")
                     }
                 } else {
-                    print("   📍 \(key): \(value) (type: \(type(of: value)))")
                 }
             } else {
-                print("   📋 \(key): \(type(of: value))")
             }
         }
         
@@ -545,7 +535,6 @@ class WidgetAPIClient {
             return nil
         }
         
-        print("✅ WIDGET API: Found \(userData.count) bytes of user data in shared container")
         
         do {
             // Define a struct that matches AppGroupManager.SimpleUser exactly

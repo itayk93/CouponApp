@@ -436,7 +436,8 @@ struct DocumentPicker: UIViewControllerRepresentable {
                 telegramMonthlySummary: true,
                 newsletterImage: nil,
                 showWhatsappBanner: false,
-                faceIdEnabled: false
+                faceIdEnabled: false,
+                pushToken: nil
             ),
             companies: [
                 Company(id: 13, name: "Wolt", imagePath: "Wolt.png", companyCount: 0),

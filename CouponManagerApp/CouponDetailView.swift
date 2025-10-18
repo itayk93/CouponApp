@@ -99,6 +99,7 @@ struct CouponDetailView: View {
             Button("ביטול", role: .cancel) { }
         } message: {
             Text("האם אתה בטוח שברצונך למחוק את הקופון? פעולה זו אינה ניתנת לביטול.")
+                .multilineTextAlignment(.trailing)
         }
         .alert("סימון קופון כנוצל", isPresented: $showingMarkUsedAlert) {
             Button("סמן כנוצל", role: .destructive) {
@@ -106,7 +107,7 @@ struct CouponDetailView: View {
             }
             Button("ביטול", role: .cancel) { }
         } message: {
-            Text("האם אתה בטוח שברצונך לסמן קופון זה כנוצל?")
+            Text("האם אתה בטוח שברצונך לסמן קופון זה כנוצל?").multilineTextAlignment(.trailing)
         }
         .alert("הגעת למקסימום קופונים בווידג'ט", isPresented: $showWidgetLimitAlert) {
             Button("נהל קופונים בווידג'ט") {
@@ -830,7 +831,6 @@ struct CouponDetailView: View {
 
 
     private func markCouponAsUsed() {
-        // TODO: Implement mark as used functionality
         couponAPI.markCouponAsUsed(couponId: coupon.id) { result in
             switch result {
             case .success:
@@ -1070,21 +1070,39 @@ struct TransactionRowView: View {
     }
     
     private func formatTimestamp(_ timestamp: String?) -> String {
-        guard let timestamp = timestamp else { return "-" }
-        
-        // Try to parse the timestamp
-        let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: timestamp) else { 
-            return timestamp // Return original if parsing fails
+        guard let timestampStr = timestamp else { return "-" }
+
+        let formatters = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd HH:mm:ssZ",
+            "yyyy-MM-dd HH:mm:ss.SSSSSS"
+        ].map { format -> DateFormatter in
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            return formatter
         }
-        
-        // Format for display
+
+        var date: Date?
+        for formatter in formatters {
+            if let d = formatter.date(from: timestampStr) {
+                date = d
+                break
+            }
+        }
+
+        guard let finalDate = date else {
+            return "-"
+        }
+
         let displayFormatter = DateFormatter()
         displayFormatter.dateStyle = .short
-        displayFormatter.timeStyle = .short
+        displayFormatter.timeStyle = .none // No time needed for this view
         displayFormatter.locale = Locale(identifier: "he_IL")
         
-        return displayFormatter.string(from: date)
+        return displayFormatter.string(from: finalDate)
     }
 }
 
@@ -1247,7 +1265,8 @@ struct ShareSheet: UIViewControllerRepresentable {
                 telegramMonthlySummary: true,
                 newsletterImage: nil,
                 showWhatsappBanner: false,
-                faceIdEnabled: false
+                faceIdEnabled: false,
+                pushToken: nil
             ),
             companies: [
                 Company(id: 1, name: "קרפור", imagePath: "images/carrefour.png", companyCount: 1)

@@ -31,6 +31,10 @@ struct ContentView: View {
                         
                         // Save user data for widget
                         AppGroupManager.shared.saveCurrentUserToSharedContainer(user)
+                        
+                        // Register for push notifications
+                        registerForPushNotifications()
+                        
                         // After a successful login, check if there is a pending coupon from a widget tap
                         handlePendingCouponIfAny(user: user)
                     },
@@ -40,6 +44,17 @@ struct ContentView: View {
                 )
                 .onAppear {
                     checkForAutoLogin()
+                }
+            }
+        }
+    }
+    
+    private func registerForPushNotifications() {
+        Task {
+            let granted = await NotificationManager.shared.requestAuthorization()
+            if granted {
+                await MainActor.run {
+                    UIApplication.shared.registerForRemoteNotifications()
                 }
             }
         }
@@ -78,8 +93,12 @@ struct ContentView: View {
                         DispatchQueue.main.async {
                             currentUser = user
                             isLoggedIn = true
-                                    // After Face ID auto-login, check for pending coupon
-                                    handlePendingCouponIfAny(user: user)
+                            // Also save to shared container to ensure AppDelegate sees user when APNs returns token
+                            AppGroupManager.shared.saveCurrentUserToSharedContainer(user)
+                            // Ensure APNs registration also happens on auto-login
+                            registerForPushNotifications()
+                            // After Face ID auto-login, check for pending coupon
+                            handlePendingCouponIfAny(user: user)
                         }
                     }
                 }

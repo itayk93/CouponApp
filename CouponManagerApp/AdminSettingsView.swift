@@ -238,6 +238,7 @@ struct AdminSettingsView: View {
             Button("אישור") { }
         } message: {
             Text(testMessage)
+                .multilineTextAlignment(.trailing)
         }
     }
     
@@ -347,7 +348,8 @@ struct AdminSettingsView: View {
         telegramMonthlySummary: true,
         newsletterImage: nil,
         showWhatsappBanner: false,
-        faceIdEnabled: false
+        faceIdEnabled: false,
+        pushToken: nil
     )) {
         print("Back pressed")
     }
