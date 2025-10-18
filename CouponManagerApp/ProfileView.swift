@@ -51,12 +51,10 @@ struct ProfileView: View {
                     await faceIDManager.loadFaceIDPreference(for: user.id)
                 }
             }
-            .alert("זיהוי פנים", isPresented: $showingFaceIDAlert) {
-                Button("אישור", role: .cancel) { }
-            } message: {
-                Text(faceIDAlertMessage)
-                    .multilineTextAlignment(.trailing)
-            }
+            .rtlAlert("זיהוי פנים",
+                      isPresented: $showingFaceIDAlert,
+                      message: faceIDAlertMessage,
+                      buttons: [RTLAlertButton("אישור", role: .cancel, action: nil)])
             .sheet(isPresented: $showingAdminSettings) {
                 AdminSettingsView(user: user) {
                     showingAdminSettings = false
@@ -225,7 +223,7 @@ struct ProfileView: View {
                         
                         Toggle("", isOn: $faceIDManager.isFaceIDEnabled)
                             .labelsHidden()
-                            .onChange(of: faceIDManager.isFaceIDEnabled) { newValue in
+                            .onChange(of: faceIDManager.isFaceIDEnabled) { _, newValue in
                                 handleFaceIDToggle(newValue)
                             }
                     }

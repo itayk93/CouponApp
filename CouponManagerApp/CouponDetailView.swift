@@ -92,31 +92,27 @@ struct CouponDetailView: View {
         .sheet(isPresented: $showingShareSheet) {
             ShareSheet(activityItems: ["שיתוף קופון \(coupon.company)"])
         }
-        .alert("מחיקת קופון", isPresented: $showingDeleteAlert) {
-            Button("מחק", role: .destructive) {
-                deleteCoupon()
-            }
-            Button("ביטול", role: .cancel) { }
-        } message: {
-            Text("האם אתה בטוח שברצונך למחוק את הקופון? פעולה זו אינה ניתנת לביטול.")
-                .multilineTextAlignment(.trailing)
-        }
-        .alert("סימון קופון כנוצל", isPresented: $showingMarkUsedAlert) {
-            Button("סמן כנוצל", role: .destructive) {
-                markCouponAsUsed()
-            }
-            Button("ביטול", role: .cancel) { }
-        } message: {
-            Text("האם אתה בטוח שברצונך לסמן קופון זה כנוצל?").multilineTextAlignment(.trailing)
-        }
-        .alert("הגעת למקסימום קופונים בווידג'ט", isPresented: $showWidgetLimitAlert) {
-            Button("נהל קופונים בווידג'ט") {
-                showWidgetManagementSheet = true
-            }
-            Button("ביטול", role: .cancel) { }
-        } message: {
-            Text("ניתן להציג עד 4 קופונים בווידג'ט. כדי להוסיף קופון זה, עליך להסיר קופון אחר תחילה.")
-        }
+        .rtlAlert("מחיקת קופון",
+                  isPresented: $showingDeleteAlert,
+                  message: "האם אתה בטוח שברצונך למחוק את הקופון? פעולה זו אינה ניתנת לביטול.",
+                  buttons: [
+                    RTLAlertButton("מחק", role: .destructive) { deleteCoupon() },
+                    RTLAlertButton("ביטול", role: .cancel, action: nil)
+                  ])
+        .rtlAlert("סימון קופון כנוצל",
+                  isPresented: $showingMarkUsedAlert,
+                  message: "האם אתה בטוח שברצונך לסמן קופון זה כנוצל?",
+                  buttons: [
+                    RTLAlertButton("סמן כנוצל", role: .destructive) { markCouponAsUsed() },
+                    RTLAlertButton("ביטול", role: .cancel, action: nil)
+                  ])
+        .rtlAlert("הגעת למקסימום קופונים בווידג'ט",
+                  isPresented: $showWidgetLimitAlert,
+                  message: "ניתן להציג עד 4 קופונים בווידג'ט. כדי להוסיף קופון זה, עליך להסיר קופון אחר תחילה.",
+                  buttons: [
+                    RTLAlertButton("נהל קופונים בווידג'ט") { showWidgetManagementSheet = true },
+                    RTLAlertButton("ביטול", role: .cancel, action: nil)
+                  ])
         .sheet(isPresented: $showWidgetManagementSheet) {
             WidgetCouponsManagementView(user: user, onUpdate: {
                 loadAllCoupons()
@@ -183,7 +179,8 @@ struct CouponDetailView: View {
                     .font(.title2)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(user.firstName) \(user.lastName)")
+                    let sellerName: String = "\(user.firstName ?? "") \(user.lastName ?? "")"
+                    Text(sellerName)
                         .fontWeight(.semibold)
                     
                     HStack {
@@ -347,7 +344,7 @@ struct CouponDetailView: View {
             if coupon.userId == user.id && coupon.status == "פעיל" {
                 Toggle("הצג בווידג'ט", isOn: $showInWidgetToggle)
                     .toggleStyle(SwitchToggleStyle(tint: .green))
-                    .onChange(of: showInWidgetToggle) { newValue in
+                    .onChange(of: showInWidgetToggle) { _, newValue in
                         updateShowInWidget(show: newValue)
                     }
             }

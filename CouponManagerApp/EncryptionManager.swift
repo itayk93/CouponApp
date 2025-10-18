@@ -66,7 +66,7 @@ class EncryptionManager {
             return nil
         }
         
-        let timestamp = encryptedData[1..<9]
+        _ = encryptedData[1..<9]
         let iv = encryptedData[9..<25]
         let hmac = encryptedData.suffix(32)
         let ciphertext = encryptedData[25..<(encryptedData.count-32)]

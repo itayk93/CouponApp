@@ -172,23 +172,26 @@ struct EditCouponView: View {
                 }
             }
             .disabled(isLoading)
-            .alert("שגיאה", isPresented: .constant(!errorMessage.isEmpty)) {
-                Button("OK") {
-                    errorMessage = ""
-                }
-            } message: {
-                Text(errorMessage)
-                    .multilineTextAlignment(.trailing)
-            }
-            .alert("הצלחה", isPresented: .constant(!successMessage.isEmpty)) {
-                Button("OK") {
-                    successMessage = ""
+            .rtlAlert(
+                "שגיאה",
+                isPresented: Binding<Bool>(
+                    get: { !errorMessage.isEmpty },
+                    set: { newValue in if !newValue { errorMessage = "" } }
+                ),
+                message: errorMessage,
+                buttons: [RTLAlertButton("OK", role: .cancel, action: nil)]
+            )
+            .rtlAlert(
+                "הצלחה",
+                isPresented: Binding<Bool>(
+                    get: { !successMessage.isEmpty },
+                    set: { newValue in if !newValue { successMessage = "" } }
+                ),
+                message: successMessage,
+                buttons: [RTLAlertButton("OK", role: .cancel) {
                     presentationMode.wrappedValue.dismiss()
-                }
-            } message: {
-                Text(successMessage)
-                    .multilineTextAlignment(.trailing)
-            }
+                }]
+            )
             .onAppear {
                 loadCompaniesFromAPI()
             }
@@ -334,7 +337,7 @@ struct EditCouponView: View {
                     TextField("0", text: $cost)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .onChange(of: cost) { _ in
+                        .onChange(of: cost) {
                             updateCalculations(changedField: "cost")
                         }
                     Text("₪")
@@ -350,7 +353,7 @@ struct EditCouponView: View {
                     TextField("0", text: $discountPercentage)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .onChange(of: discountPercentage) { _ in
+                        .onChange(of: discountPercentage) {
                             updateCalculations(changedField: "discount")
                         }
                     Text("%")
@@ -373,7 +376,7 @@ struct EditCouponView: View {
                     TextField("0", text: $value)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .onChange(of: value) { _ in
+                        .onChange(of: value) {
                             updateCalculations(changedField: "value")
                         }
                     Text("₪")
@@ -538,7 +541,7 @@ struct EditCouponView: View {
                         TextField("MM/YY", text: $cardExpiry)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .keyboardType(.numberPad)
-                            .onChange(of: cardExpiry) { newValue in
+                            .onChange(of: cardExpiry) { _, newValue in
                                 formatCardExpiry(newValue)
                             }
                     }
@@ -650,15 +653,15 @@ struct EditCouponView: View {
         successMessage = ""
         
         // Encrypt sensitive data
-        let encryptedCode = EncryptionManager.encryptString(code) ?? code
-        let encryptedDescription = description.isEmpty ? nil : (EncryptionManager.encryptString(description) ?? description)
-        let encryptedCvv = cvv.isEmpty ? nil : (EncryptionManager.encryptString(cvv) ?? cvv)
+        let encryptedCode = EncryptionManager.encryptString(code)
+        let encryptedDescription = description.isEmpty ? nil : EncryptionManager.encryptString(description)
+        let encryptedCvv = cvv.isEmpty ? nil : EncryptionManager.encryptString(cvv)
         
         // Encrypt URL fields
-        let encryptedBuyMeUrl = buyMeUrl.isEmpty ? nil : (EncryptionManager.encryptString(buyMeUrl) ?? buyMeUrl)
-        let encryptedStraussUrl = (hasStraussUrl && !straussUrl.isEmpty) ? (EncryptionManager.encryptString(straussUrl) ?? straussUrl) : nil
-        let encryptedXGiftCardUrl = (hasXGiftCardUrl && !xgiftcardUrl.isEmpty) ? (EncryptionManager.encryptString(xgiftcardUrl) ?? xgiftcardUrl) : nil
-        let encryptedXtraUrl = (hasXtraUrl && !xtraUrl.isEmpty) ? (EncryptionManager.encryptString(xtraUrl) ?? xtraUrl) : nil
+        let encryptedBuyMeUrl = buyMeUrl.isEmpty ? nil : EncryptionManager.encryptString(buyMeUrl)
+        let encryptedStraussUrl = (hasStraussUrl && !straussUrl.isEmpty) ? EncryptionManager.encryptString(straussUrl) : nil
+        let encryptedXGiftCardUrl = (hasXGiftCardUrl && !xgiftcardUrl.isEmpty) ? EncryptionManager.encryptString(xgiftcardUrl) : nil
+        let encryptedXtraUrl = (hasXtraUrl && !xtraUrl.isEmpty) ? EncryptionManager.encryptString(xtraUrl) : nil
         
         let updateData: [String: Any] = [
             "code": encryptedCode,

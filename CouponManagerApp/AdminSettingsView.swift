@@ -234,12 +234,10 @@ struct AdminSettingsView: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
-        .alert("הודעה", isPresented: $showingAlert) {
-            Button("אישור") { }
-        } message: {
-            Text(testMessage)
-                .multilineTextAlignment(.trailing)
-        }
+        .rtlAlert("הודעה",
+                  isPresented: $showingAlert,
+                  message: testMessage,
+                  buttons: [RTLAlertButton("אישור", role: .cancel, action: nil)])
     }
     
     private var currentSettingsSection: some View {

@@ -240,6 +240,7 @@ private struct ReviewCardView: View {
     @FocusState.Binding var focusedField: UUID?
     
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showCouponPicker: Bool = false
     
     private var selectedCoupon: Coupon? {
         row.options.first { $0.id == row.selectedCouponId }
@@ -275,19 +276,43 @@ private struct ReviewCardView: View {
                 }
             }
             
-            // Custom Picker implementation to avoid "expression too complex" error
-            pickerLabel
-                .contentShape(Rectangle()) // Explicitly define the tappable area
-                .overlay(
-                    Picker("בחר קופון", selection: $row.selectedCouponId) {
-                        ForEach(row.options, id: \.id) { c in
-                            couponPickerRow(for: c).tag(c.id)
+            // Tappable code opens a full list of same-company coupons
+            Button(action: { showCouponPicker = true }) {
+                pickerLabel
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .sheet(isPresented: $showCouponPicker) {
+                NavigationView {
+                    List(row.options, id: \.id) { c in
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(c.decryptedCode ?? "—")
+                                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                Text("נותר: ₪\(numberString(c.remainingValue))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            if c.id == row.selectedCouponId {
+                                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            row.selectedCouponId = c.id
+                            showCouponPicker = false
                         }
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .opacity(0.025) // Make it tappable but invisible
-                )
+                    .navigationTitle("בחר קופון")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("סגור") { showCouponPicker = false }
+                        }
+                    }
+                }
+                .environment(\.layoutDirection, .rightToLeft)
+            }
             
             // Amount input
             HStack(spacing: 10) {

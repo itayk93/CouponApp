@@ -48,7 +48,7 @@ class AppGroupManager {
             if let savedData = sharedDefaults.data(forKey: userDefaultsKey),
                let savedCoupons = try? JSONDecoder().decode([WidgetCoupon].self, from: savedData) {
                 print("✅ Verified: \(savedCoupons.count) coupons in shared container")
-                let widgetCount = savedCoupons.filter { $0.showInWidget == true }.count
+                _ = savedCoupons.filter { $0.showInWidget == true }.count
             } else {
                 print("❌ Failed to verify saved data")
             }

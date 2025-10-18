@@ -14,6 +14,8 @@ struct CouponManagerAppApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()  // מסך ראשי שמנהל את ההתחברות ומעבר לאפליקציה
+                // Ensure SwiftUI views (including alerts) use RTL layout
+                .environment(\.layoutDirection, .rightToLeft)
                 .onOpenURL { url in
                     handleDeepLink(url: url)
                 }

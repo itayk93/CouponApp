@@ -330,7 +330,6 @@ struct LoginView: View {
         print("🔐 Attempting login for: \(email)")
         
         // Find user by email
-        let apiClient = APIClient()
         
         // Search for user by email instead of ID
         // let originalFetchUser = apiClient.fetchUser  // Not needed anymore

@@ -4,6 +4,19 @@ import UIKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        // Force right-to-left layout across UIKit components (affects system alerts as well)
+        UIView.appearance().semanticContentAttribute = .forceRightToLeft
+        UINavigationBar.appearance().semanticContentAttribute = .forceRightToLeft
+        UITabBar.appearance().semanticContentAttribute = .forceRightToLeft
+        UITableView.appearance().semanticContentAttribute = .forceRightToLeft
+        UICollectionView.appearance().semanticContentAttribute = .forceRightToLeft
+
+        // Ensure UIAlertController contents (title/message) are right aligned
+        if #available(iOS 13.0, *) {
+            UIView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).semanticContentAttribute = .forceRightToLeft
+            UILabel.appearance(whenContainedInInstancesOf: [UIAlertController.self]).textAlignment = .right
+            UITextView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).textAlignment = .right
+        }
         return true
     }
 

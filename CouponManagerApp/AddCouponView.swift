@@ -184,31 +184,33 @@ struct AddCouponView: View {
                 #endif
             }
             .disabled(isLoading)
-            .alert("שגיאה", isPresented: .constant(!errorMessage.isEmpty)) {
-                Button("OK") {
-                    errorMessage = ""
-                }
-            } message: {
-                Text(errorMessage)
-                    .multilineTextAlignment(.trailing)
-            }
-            .alert("הצלחה", isPresented: .constant(!successMessage.isEmpty)) {
-                Button("OK") {
-                    successMessage = ""
-                }
-            } message: {
-                Text(successMessage)
-                    .multilineTextAlignment(.trailing)
-            }
-            .alert("תאריך תפוגה", isPresented: $showingExpirationAlert) {
-                Button("ביטול", role: .cancel) { }
-                Button("המשך") {
-                    performAddCoupon()
-                }
-            } message: {
-                Text("תאריך התפוגה הוא היום או לפני היום. האם ברצונך להמשיך?")
-                    .multilineTextAlignment(.trailing)
-            }
+            .rtlAlert(
+                "שגיאה",
+                isPresented: Binding<Bool>(
+                    get: { !errorMessage.isEmpty },
+                    set: { newValue in if !newValue { errorMessage = "" } }
+                ),
+                message: errorMessage,
+                buttons: [RTLAlertButton("OK", role: .cancel, action: nil)]
+            )
+            .rtlAlert(
+                "הצלחה",
+                isPresented: Binding<Bool>(
+                    get: { !successMessage.isEmpty },
+                    set: { newValue in if !newValue { successMessage = "" } }
+                ),
+                message: successMessage,
+                buttons: [RTLAlertButton("OK", role: .cancel, action: nil)]
+            )
+            .rtlAlert(
+                "תאריך תפוגה",
+                isPresented: $showingExpirationAlert,
+                message: "תאריך התפוגה הוא היום או לפני היום. האם ברצונך להמשיך?",
+                buttons: [
+                    RTLAlertButton("ביטול", role: .cancel, action: nil),
+                    RTLAlertButton("המשך") { performAddCoupon() }
+                ]
+            )
             .onAppear {
                 // Always try to use passed companies first, then load from API
                 if !companies.isEmpty {
