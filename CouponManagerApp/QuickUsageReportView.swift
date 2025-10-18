@@ -7,6 +7,124 @@
 
 import SwiftUI
 import Combine
+import UIKit
+
+// MARK: - Quick Usage AI Models (file-scoped)
+fileprivate struct ReviewRow: Identifiable {
+    let id = UUID()
+    let company: String
+    let options: [Coupon]
+    var selectedCouponId: Int
+    var amountText: String
+    var checked: Bool
+    var confidence: Double
+    var matchedText: String?
+}
+
+fileprivate struct QuickAISuggestion: Identifiable {
+    let id = UUID()
+    let couponId: String
+    let confidence: Double
+    let matchedText: String?
+    let rationale: String?
+    let usedAmount: Double?
+}
+
+fileprivate struct QuickActiveCouponDTO: Codable {
+    let id: String
+    let title: String
+    let code: String?
+    let merchant: String?
+}
+
+fileprivate final class QuickAIUsageService {
+    private let session: URLSession
+    private let model = "gpt-4o-mini"
+
+    init(session: URLSession = .shared) { self.session = session }
+
+    private func apiKey() -> String? { Config.openAIAPIKey }
+
+    private struct OpenAIResponse: Codable { struct Choice: Codable { struct Message: Codable { let content: String }; let message: Message }; let choices: [Choice] }
+    private struct AIVendorResponse: Codable { struct Vendor: Codable { let name: String; let amount: Double?; let matchedText: String?; let rationale: String? }; let vendors: [Vendor] }
+
+    func analyzeUsedCoupons(from text: String, activeCoupons: [QuickActiveCouponDTO]) async throws -> [QuickAISuggestion] {
+        enum LocalError: Error { case missingKey, invalidResponse, decoding, apiError(String) }
+        guard let apiKey = apiKey(), !apiKey.isEmpty else { throw LocalError.missingKey }
+
+        let companies = Array(Set(activeCoupons.map { ($0.merchant ?? $0.title).trimmingCharacters(in: .whitespacesAndNewlines) })).sorted()
+
+        let systemPrompt = """
+You are an expert at extracting structured data from Hebrew text about coupon usage.
+From the user's text, identify vendors and the amount spent.
+- ONLY match vendors from the provided list: \(companies.joined(separator: ", ")).
+- Be flexible with names (e.g., \"שופרסל\" vs \"Shufersal\").
+- Extract numeric amounts (e.g., \"50 שח\", \"ILS 50\", \"fifty\"). If no amount is clear for a vendor, use null.
+- Your entire output MUST be a valid JSON object.
+
+Example:
+User: \"השתמשתי ב-50 שקל בשופרסל וגם קניתי בגוד פארם\"
+Vendors: [\"Shufersal\", \"Good Pharm\"]
+Output:
+{
+  \"vendors\": [
+    { \"name\": \"Shufersal\", \"amount\": 50.0, \"matchedText\": \"50 שקל בשופרסל\", \"rationale\": \"Clear mention of amount and vendor.\" },
+    { \"name\": \"Good Pharm\", \"amount\": null, \"matchedText\": \"גוד פארם\", \"rationale\": \"Vendor mentioned, but no specific amount.\" }
+  ]
+}
+"""
+
+        let userPrompt = "Text to analyze: \"\(text)\""
+
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": userPrompt]
+            ],
+            "response_format": ["type": "json_object"]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = data
+
+        let (respData, resp) = try await session.data(for: request)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let errorBody = String(data: respData, encoding: .utf8) ?? "No details"
+            throw LocalError.apiError("Code \( (resp as? HTTPURLResponse)?.statusCode ?? 0): \(errorBody)")
+        }
+
+        let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: respData)
+        guard let content = decoded.choices.first?.message.content.data(using: .utf8) else { throw LocalError.decoding }
+        let vendorResult = try JSONDecoder().decode(AIVendorResponse.self, from: content)
+
+        func normalize(_ s: String) -> String {
+            return s.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation }
+        }
+
+        let couponsByCompany = Dictionary(grouping: activeCoupons, by: { normalize($0.merchant ?? $0.title) })
+
+        var out: [QuickAISuggestion] = []
+        for v in vendorResult.vendors {
+            let key = normalize(v.name)
+            if let matches = couponsByCompany[key] {
+                for c in matches {
+                    out.append(QuickAISuggestion(
+                        couponId: c.id,
+                        confidence: 0.85,
+                        matchedText: v.matchedText,
+                        rationale: v.rationale,
+                        usedAmount: v.amount
+                    ))
+                }
+            }
+        }
+        return out
+    }
+}
 
 struct QuickUsageReportView: View {
     let user: User
@@ -17,6 +135,7 @@ struct QuickUsageReportView: View {
     @StateObject private var couponAPI = CouponAPIClient()
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.layoutDirection) private var layoutDirection
     
     @State private var inputText: String = ""
     @State private var isAnalyzing: Bool = false
@@ -27,6 +146,7 @@ struct QuickUsageReportView: View {
     
     // To control keyboard focus
     @FocusState private var focusedField: UUID?
+    @FocusState private var isMainInputFocused: Bool
     
     private var activeCoupons: [Coupon] {
         coupons.filter { !$0.isForSale && $0.status == "פעיל" && !$0.isExpired }
@@ -50,6 +170,7 @@ struct QuickUsageReportView: View {
                         .background(Color(.secondarySystemBackground))
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.3), lineWidth: 1))
                         .cornerRadius(10)
+                        .focused($isMainInputFocused)
                     
                     Button {
                         Task {
@@ -85,7 +206,15 @@ struct QuickUsageReportView: View {
                         }
 
                         ForEach($reviewRows) { $row in
-                            ReviewCardView(row: $row, allCompanies: allCompanies, focusedField: $focusedField)
+                            ReviewCardView(
+                                row: $row,
+                                allCompanies: allCompanies,
+                                focusedField: $focusedField,
+                                onApproveSwipe: { couponId, usedAmount in
+                                    // Submit this single row immediately when swiped left to approve
+                                    Task { await submitSingleReport(rowId: row.id, couponId: couponId, usedAmount: usedAmount) }
+                                }
+                            )
                                 .padding(.vertical, 6)
                         }
                     }
@@ -101,6 +230,18 @@ struct QuickUsageReportView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("סגור") { presentationMode.wrappedValue.dismiss() }
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("סגור מקלדת") {
+                        isMainInputFocused = false
+                        focusedField = nil
+                    }
+                }
+            }
+            .onTapGesture {
+                // Tap outside to dismiss any focused input
+                isMainInputFocused = false
+                focusedField = nil
             }
         }
     }
@@ -137,7 +278,14 @@ struct QuickUsageReportView: View {
             await MainActor.run { self.errorMessage = "שגיאת תקשורת עם שירות הזיהוי: \(error.localizedDescription)" }
         }
 
-        await MainActor.run { self.isAnalyzing = false }
+        await MainActor.run {
+            self.isAnalyzing = false
+            // Dismiss keyboard when entering review mode
+            if self.inReviewMode {
+                self.isMainInputFocused = false
+                self.focusedField = nil
+            }
+        }
     }
 
     private func buildReviewRows(from suggestions: [QuickAISuggestion]) -> [ReviewRow] {
@@ -159,10 +307,22 @@ struct QuickUsageReportView: View {
             
             let initialAmount = firstItem.suggestion.usedAmount.map { numberString($0, fractionalDigits: 2) } ?? ""
             
+            // Sort options by lowest remaining value, then nearest expiration
+            let optionsSorted = options.sorted { lhs, rhs in
+                let lhsRem = lhs.remainingValue
+                let rhsRem = rhs.remainingValue
+                if abs(lhsRem - rhsRem) > 0.0001 {
+                    return lhsRem < rhsRem
+                }
+                let lExp = lhs.expirationDate ?? .distantFuture
+                let rExp = rhs.expirationDate ?? .distantFuture
+                return lExp < rExp
+            }
+
             return ReviewRow(
                 company: company,
-                options: options,
-                selectedCouponId: firstItem.coupon.id,
+                options: optionsSorted,
+                selectedCouponId: optionsSorted.first?.id ?? firstItem.coupon.id,
                 amountText: initialAmount,
                 checked: true,
                 confidence: firstItem.suggestion.confidence,
@@ -202,6 +362,32 @@ struct QuickUsageReportView: View {
         }
     }
 
+    // Submit a single review row (used by swipe-left approve)
+    private func submitSingleReport(rowId: UUID, couponId: Int, usedAmount: Double) async {
+        let details = "דיווח מהיר: \(inputText)"
+        await MainActor.run { self.isAnalyzing = true; self.errorMessage = nil }
+        do {
+            try await reportUsage(for: couponId, usedAmount: usedAmount, details: details)
+            await MainActor.run {
+                // Remove the row that was just approved
+                if let idx = self.reviewRows.firstIndex(where: { $0.id == rowId }) {
+                    withAnimation { self.reviewRows.remove(at: idx) }
+                }
+                // If no more rows left, refresh and close
+                if self.reviewRows.isEmpty {
+                    self.onUsageReported()
+                    self.presentationMode.wrappedValue.dismiss()
+                }
+                self.isAnalyzing = false
+            }
+        } catch {
+            await MainActor.run {
+                self.isAnalyzing = false
+                self.errorMessage = "אירעה שגיאה בעת עדכון השימוש: \(error.localizedDescription)"
+            }
+        }
+    }
+
     private func reportUsage(for id: Int, usedAmount: Double, details: String) async throws {
         let request = CouponUsageRequest(usedAmount: usedAmount, action: "use", details: details)
         return try await withCheckedThrowingContinuation { continuation in
@@ -234,20 +420,70 @@ struct QuickUsageReportView: View {
 }
 
 // MARK: - Review Card Subview
-private struct ReviewCardView: View {
-    @Binding var row: ReviewRow
-    let allCompanies: [Company]
-    @FocusState.Binding var focusedField: UUID?
+fileprivate struct ReviewCardView: View {
+    @Binding private var row: ReviewRow
+    private let allCompanies: [Company]
+    @FocusState.Binding private var focusedField: UUID?
+    private let onApproveSwipe: (Int, Double) -> Void
     
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var showCouponPicker: Bool = false
+    @State private var swipeOffset: CGFloat = 0
+    private let swipeThreshold: CGFloat = 80
+    @State private var didCrossLeftThreshold: Bool = false
+    @State private var didCrossRightThreshold: Bool = false
+    
+    // Explicit initializer to expose memberwise init despite private properties
+    init(
+        row: Binding<ReviewRow>,
+        allCompanies: [Company],
+        focusedField: FocusState<UUID?>.Binding,
+        onApproveSwipe: @escaping (Int, Double) -> Void
+    ) {
+        self._row = row
+        self.allCompanies = allCompanies
+        self._focusedField = focusedField
+        self.onApproveSwipe = onApproveSwipe
+    }
     
     private var selectedCoupon: Coupon? {
         row.options.first { $0.id == row.selectedCouponId }
     }
     
     var body: some View {
-        VStack(spacing: 12) {
+        ZStack {
+            // Colored background that fades in like Gmail
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    (swipeOffset > 0 ? Color.red : (swipeOffset < 0 ? Color.green : Color.clear))
+                        .opacity(min(abs(swipeOffset) / swipeThreshold, 1) * 0.15)
+                )
+                .allowsHitTesting(false)
+
+            // Background swipe indicators (stay put while card moves)
+            HStack {
+                // Right swipe (cancel)
+                Label("בטל", systemImage: "xmark.circle.fill")
+                    .foregroundColor(.red)
+                    .font(.title3)
+                    .opacity(max(0, min(swipeOffset / swipeThreshold, 1)))
+                    .padding(.leading, 16)
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                Spacer(minLength: 0)
+                // Left swipe (approve)
+                Label("אשר", systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.title3)
+                    .opacity(max(0, min(-swipeOffset / swipeThreshold, 1)))
+                    .padding(.trailing, 16)
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 6)
+            .allowsHitTesting(false)
+
+            VStack(spacing: 12) {
             // Header with checkbox and company name
             HStack(alignment: .center) {
                 Image(systemName: row.checked ? "checkmark.circle.fill" : "circle")
@@ -286,14 +522,29 @@ private struct ReviewCardView: View {
                 NavigationView {
                     List(row.options, id: \.id) { c in
                         HStack(spacing: 12) {
+                            // Company logo (match implementation from CouponDetailView)
+                            companyLogo(for: row.company)
+                                .frame(width: 28, height: 28)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(c.decryptedCode ?? "—")
+                                Text(c.decryptedCode)
                                     .font(.system(size: 18, weight: .bold, design: .monospaced))
                                 Text("נותר: ₪\(numberString(c.remainingValue))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+
                             Spacer()
+
+                            // Expiration date on the trailing side
+                            let exp = c.formattedExpirationDate
+                            if exp != "ללא תפוגה" {
+                                Text(exp)
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
+
                             if c.id == row.selectedCouponId {
                                 Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
                             }
@@ -346,6 +597,64 @@ private struct ReviewCardView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(row.checked ? Color.green.opacity(0.7) : Color.gray.opacity(0.2), lineWidth: 1.5)
         )
+        // Indicators moved to background HStack above
+        .contentShape(Rectangle())
+        .offset(x: swipeOffset)
+        .highPriorityGesture(
+            DragGesture()
+                .onChanged { value in
+                    guard abs(value.translation.height) < 40 else { return }
+                    guard focusedField != row.id && !showCouponPicker else { return }
+                    let effective = (layoutDirection == .rightToLeft) ? -value.translation.width : value.translation.width
+                    swipeOffset = effective
+
+                    // Haptic when crossing thresholds
+                    if effective <= -swipeThreshold && !didCrossLeftThreshold {
+                        triggerHaptic(.success)
+                        didCrossLeftThreshold = true
+                        didCrossRightThreshold = false
+                    } else if effective >= swipeThreshold && !didCrossRightThreshold {
+                        triggerHaptic(.warning)
+                        didCrossRightThreshold = true
+                        didCrossLeftThreshold = false
+                    } else if abs(effective) < swipeThreshold {
+                        // Reset so user can cross again in the same gesture if they move back
+                        didCrossLeftThreshold = false
+                        didCrossRightThreshold = false
+                    }
+                }
+                .onEnded { value in
+                    guard abs(value.translation.height) < 40 else { withAnimation { swipeOffset = 0 }; return }
+                    let dx = swipeOffset
+                    if dx <= -swipeThreshold {
+                        // Approve and auto-submit this row
+                        approveAmount()
+                        if let used = parseAmount(row.amountText), used > 0 {
+                            onApproveSwipe(row.selectedCouponId, used)
+                        }
+                        triggerHaptic(.success)
+                        withAnimation(.spring()) { swipeOffset = -120 }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(120)) {
+                            withAnimation { swipeOffset = 0 }
+                        }
+                    } else if dx >= swipeThreshold {
+                        withAnimation { row.checked = false }
+                        triggerHaptic(.warning)
+                        withAnimation(.spring()) { swipeOffset = 120 }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(120)) {
+                            withAnimation { swipeOffset = 0 }
+                        }
+                    } else {
+                        withAnimation { swipeOffset = 0 }
+                    }
+
+                    // Reset haptic crossing flags for next gesture
+                    didCrossLeftThreshold = false
+                    didCrossRightThreshold = false
+                }
+        )
+    }
+
     }
 
     @ViewBuilder
@@ -372,6 +681,12 @@ private struct ReviewCardView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.green)
                     Spacer()
+                    let exp = coupon.formattedExpirationDate
+                    if exp != "ללא תפוגה" {
+                        Text(exp)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
                 }
                 .padding(.horizontal, 4)
             }
@@ -405,12 +720,20 @@ private struct ReviewCardView: View {
     @ViewBuilder
     private func companyLogo(for companyName: String) -> some View {
         let company = allCompanies.first { $0.name.caseInsensitiveCompare(companyName) == .orderedSame }
-        
-        if let company = company, let url = URL(string: company.logoURL) {
-            AsyncImage(url: url) { image in
-                image.resizable().aspectRatio(contentMode: .fit)
-            } placeholder: {
-                placeholderIcon(for: companyName)
+        // Align with CouponDetailView: baseURL + imagePath
+        if let company = company,
+           let url = URL(string: "https://www.couponmasteril.com/static/" + company.imagePath) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                case .failure(_):
+                    placeholderIcon(for: companyName)
+                case .empty:
+                    ProgressView()
+                @unknown default:
+                    placeholderIcon(for: companyName)
+                }
             }
         } else {
             placeholderIcon(for: companyName)
@@ -435,131 +758,25 @@ private struct ReviewCardView: View {
         return Double(cleaned)
     }
 
+    private func approveAmount() {
+        if let amount = parseAmount(row.amountText) {
+            row.amountText = numberString(amount)
+        }
+        row.checked = true
+    }
+
+    private func triggerHaptic(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(type)
+    }
+
     private func numberString(_ d: Double, fractionalDigits: Int = 2) -> String {
         let formatter = NumberFormatter()
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = fractionalDigits
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: d)) ?? "\(d)"
-    }
-}
-
-
-// MARK: - Data Models & AI Service (Local to this view)
-
-private struct ReviewRow: Identifiable {
-    let id = UUID()
-    let company: String
-    let options: [Coupon]
-    var selectedCouponId: Int
-    var amountText: String
-    var checked: Bool
-    var confidence: Double
-    var matchedText: String?
-}
-
-private struct QuickAISuggestion: Identifiable {
-    let id = UUID()
-    let couponId: String
-    let confidence: Double
-    let matchedText: String?
-    let rationale: String?
-    let usedAmount: Double?
-}
-
-private struct QuickActiveCouponDTO: Codable {
-    let id: String
-    let title: String
-    let code: String?
-    let merchant: String?
-}
-
-private final class QuickAIUsageService {
-    private let session: URLSession
-    private let model = "gpt-4o-mini"
-
-    init(session: URLSession = .shared) { self.session = session }
-
-    private func apiKey() -> String? { Config.openAIAPIKey }
-
-    private struct OpenAIResponse: Codable { struct Choice: Codable { struct Message: Codable { let content: String }; let message: Message }; let choices: [Choice] }
-    private struct AIVendorResponse: Codable { struct Vendor: Codable { let name: String; let amount: Double?; let matchedText: String?; let rationale: String? }; let vendors: [Vendor] }
-
-    func analyzeUsedCoupons(from text: String, activeCoupons: [QuickActiveCouponDTO]) async throws -> [QuickAISuggestion] {
-        enum LocalError: Error { case missingKey, invalidResponse, decoding, apiError(String) }
-        guard let apiKey = apiKey(), !apiKey.isEmpty else { throw LocalError.missingKey }
-
-        let companies = Array(Set(activeCoupons.map { ($0.merchant ?? $0.title).trimmingCharacters(in: .whitespacesAndNewlines) })).sorted()
-
-        let systemPrompt = """
-You are an expert at extracting structured data from Hebrew text about coupon usage.
-From the user's text, identify vendors and the amount spent.
-- ONLY match vendors from the provided list: \(companies.joined(separator: ", ")).
-- Be flexible with names (e.g., \"שופרסל\" vs \"Shufersal\").
-- Extract numeric amounts (e.g., \"50 שח\", \"ILS 50\", \"fifty\"). If no amount is clear for a vendor, use null.
-- Your entire output MUST be a valid JSON object.
-
-Example:
-User: \"השתמשתי ב-50 שקל בשופרסל וגם קניתי בגוד פארם\"
-Vendors: [\"Shufersal\", \"Good Pharm\"]
-Output:
-{
-  \"vendors\": [
-    { \"name\": \"Shufersal\", \"amount\": 50.0, \"matchedText\": \"50 שקל בשופרסל\", \"rationale\": \"Clear mention of amount and vendor.\" },
-    { \"name\": \"Good Pharm\", \"amount\": null, \"matchedText\": \"גוד פארם\", \"rationale\": \"Vendor mentioned, but no specific amount.\" }
-  ]
-}
-"""
-        
-        let userPrompt = "Text to analyze: \"\(text)\""
-
-        let body: [String: Any] = [
-            "model": model,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": userPrompt]
-            ],
-            "response_format": ["type": "json_object"]
-        ]
-        let data = try JSONSerialization.data(withJSONObject: body)
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = data
-
-        let (respData, resp) = try await session.data(for: request)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            let errorBody = String(data: respData, encoding: .utf8) ?? "No details"
-            throw LocalError.apiError("Code \( (resp as? HTTPURLResponse)?.statusCode ?? 0): \(errorBody)")
-        }
-        
-        let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: respData)
-        guard let content = decoded.choices.first?.message.content.data(using: .utf8) else { throw LocalError.decoding }
-        let vendorResult = try JSONDecoder().decode(AIVendorResponse.self, from: content)
-
-        func normalize(_ s: String) -> String {
-            return s.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation }
-        }
-
-        let couponsByCompany = Dictionary(grouping: activeCoupons, by: { normalize($0.merchant ?? $0.title) })
-
-        var out: [QuickAISuggestion] = []
-        for v in vendorResult.vendors {
-            let key = normalize(v.name)
-            if let matches = couponsByCompany[key] {
-                for c in matches {
-                    out.append(QuickAISuggestion(
-                        couponId: c.id,
-                        confidence: 0.85, // Static confidence for now
-                        matchedText: v.matchedText,
-                        rationale: v.rationale,
-                        usedAmount: v.amount
-                    ))
-                }
-            }
-        }
-        return out
     }
 }
 
