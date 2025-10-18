@@ -469,8 +469,17 @@ class CouponAPIClient: ObservableObject {
                     let coupons = try JSONDecoder().decode([Coupon].self, from: data)
                     if let coupon = coupons.first {
                         print("✅ Successfully created coupon with ID: \(coupon.id)")
-                        DispatchQueue.main.async {
-                            completion(.success(coupon))
+                        // After creating a coupon, mirror the web: create an initial recharge row
+                        self.upsertInitialRechargeTransaction(couponId: coupon.id, value: coupon.value) { upsertResult in
+                            switch upsertResult {
+                            case .success:
+                                print("✅ Initial recharge transaction recorded for coupon \(coupon.id)")
+                                DispatchQueue.main.async { completion(.success(coupon)) }
+                            case .failure(let err):
+                                print("❌ Failed to record initial recharge transaction: \(err)")
+                                // Still return the created coupon to the UI
+                                DispatchQueue.main.async { completion(.success(coupon)) }
+                            }
                         }
                     } else {
                         print("❌ No coupon returned from server")
@@ -505,6 +514,85 @@ class CouponAPIClient: ObservableObject {
         } catch {
             completion(.failure(error))
         }
+    }
+
+    // MARK: - Upsert initial recharge transaction (balance row)
+    // Creates or updates the initial balance row in coupon_transaction, similar to Flask add_coupon_transaction
+    func upsertInitialRechargeTransaction(couponId: Int, value: Double, completion: @escaping (Result<Void, Error>) -> Void) {
+        // 1) Try to update existing 'Initial' or 'ManualEntry' record
+        guard let patchURL = URL(string: "\(baseURL)/rest/v1/coupon_transaction?coupon_id=eq.\(couponId)&source=eq.User&reference_number=in.(Initial,ManualEntry)") else {
+            completion(.failure(URLError(.badURL)))
+            return
+        }
+
+        var patchRequest = URLRequest(url: patchURL)
+        patchRequest.httpMethod = "PATCH"
+        patchRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        patchRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        patchRequest.setValue(apiKey, forHTTPHeaderField: "apikey")
+        // Ask server to return updated rows so we know if something was matched
+        patchRequest.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        let patchBody: [String: Any] = [
+            "recharge_amount": value
+        ]
+        patchRequest.httpBody = try? JSONSerialization.data(withJSONObject: patchBody)
+
+        URLSession.shared.dataTask(with: patchRequest) { data, response, error in
+            if let error = error {
+                // On error, try fallback to insert
+                print("⚠️ Patch initial transaction failed (will try insert): \(error)")
+                self.insertInitialRechargeTransaction(couponId: couponId, value: value, completion: completion)
+                return
+            }
+
+            guard let data = data else {
+                self.insertInitialRechargeTransaction(couponId: couponId, value: value, completion: completion)
+                return
+            }
+
+            // If any rows were returned, update succeeded
+            if let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], arr.count > 0 {
+                completion(.success(()))
+                return
+            }
+
+            // No existing row, insert a new one
+            self.insertInitialRechargeTransaction(couponId: couponId, value: value, completion: completion)
+        }.resume()
+    }
+
+    private func insertInitialRechargeTransaction(couponId: Int, value: Double, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let postURL = URL(string: "\(baseURL)/rest/v1/coupon_transaction") else {
+            completion(.failure(URLError(.badURL)))
+            return
+        }
+
+        var postRequest = URLRequest(url: postURL)
+        postRequest.httpMethod = "POST"
+        postRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        postRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        postRequest.setValue(apiKey, forHTTPHeaderField: "apikey")
+        postRequest.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+
+        let nowISO = ISO8601DateFormatter().string(from: Date())
+        let body: [String: Any] = [
+            "coupon_id": couponId,
+            "transaction_date": nowISO,
+            "recharge_amount": value,
+            "usage_amount": 0.0,
+            "location": "הטענה ראשונית",
+            "reference_number": "Initial",
+            "source": "User"
+        ]
+        postRequest.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: postRequest) { _, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            completion(.success(()))
+        }.resume()
     }
 
     // MARK: - Update Coupon

@@ -22,15 +22,16 @@ struct SavingsReportView: View {
         let calendar = Calendar.current
         
         return coupons.filter { coupon in
-            guard let dateAdded = coupon.dateAddedAsDate else { return false }
-            
             switch selectedTimeframe {
+            case .allTime:
+                // Include all coupons regardless of date parsing issues
+                return true
             case .thisMonth:
+                guard let dateAdded = coupon.dateAddedAsDate else { return false }
                 return calendar.isDate(dateAdded, equalTo: now, toGranularity: .month)
             case .thisYear:
+                guard let dateAdded = coupon.dateAddedAsDate else { return false }
                 return calendar.isDate(dateAdded, equalTo: now, toGranularity: .year)
-            case .allTime:
-                return true
             }
         }
     }
@@ -138,9 +139,51 @@ struct SavingsReportView: View {
             .sheet(isPresented: $showingStatisticsModal) {
                 StatisticsModalView(statistics: totalStatistics, timeframe: selectedTimeframe)
             }
+            .onAppear {
+                logSavingsDebug(context: "onAppear")
+            }
+            .onChange(of: selectedTimeframe) { _ in
+                logSavingsDebug(context: "timeframeChanged")
+            }
         }
     }
-    
+
+    // MARK: - Debug Logging
+    private func logSavingsDebug(context: String) {
+        print("\n==================== SavingsReport Debug (")
+        print("📍 Context: \(context)")
+        print("🕒 Timeframe: \(selectedTimeframe.displayName)")
+        print("🎫 Incoming coupons: \(coupons.count)")
+
+        // Date parsing stats
+        var parseOK = 0
+        var parseFail = 0
+        for c in coupons.prefix(200) { // cap to avoid huge spam
+            if c.dateAddedAsDate != nil { parseOK += 1 } else { parseFail += 1 }
+        }
+        print("📅 date_added parse OK=\(parseOK), FAIL=\(parseFail)")
+        if parseFail > 0 {
+            // Print up to 5 problematic examples
+            let bad = coupons.filter { $0.dateAddedAsDate == nil }.prefix(5)
+            for c in bad {
+                print("⚠️ Failed to parse date_added for coupon id=\(c.id), company=\(c.company), raw='\(c.dateAdded)'")
+            }
+        }
+
+        let filtered = filteredCoupons
+        print("🔎 After timeframe filter: \(filtered.count) coupons")
+
+        // Company aggregation overview
+        print("🏷️ Companies in breakdown: \(companySavingsData.count)")
+        for item in companySavingsData.prefix(10) {
+            print(" • \(item.company): coupons=\(item.totalCoupons), saved=₪\(Int(item.totalSavings)), activeValue=₪\(Int(item.totalValue)), active=\(item.activeCoupons), used=\(item.usedCoupons)")
+        }
+
+        // Totals
+        print("Σ Totals -> saved=₪\(Int(totalStatistics.totalSavings)) | activeValue=₪\(Int(totalStatistics.totalValue)) | coupons=\(totalStatistics.totalCoupons) | used=\(totalStatistics.usedCoupons) | active=\(totalStatistics.activeCoupons) | utilization=\(String(format: "%.1f", totalStatistics.utilizationRate))%")
+        print("====================\n")
+    }
+
     // MARK: - Timeframe Selector
     private var timeframeSelector: some View {
         VStack(spacing: 12) {
@@ -715,9 +758,50 @@ enum TimeframeFilter: CaseIterable {
 
 // MARK: - Coupon Date Extension
 extension Coupon {
+    // Parse `date_added` robustly: supports fractional seconds, timezone offsets, and date-only strings.
     var dateAddedAsDate: Date? {
-        let formatter = ISO8601DateFormatter()
-        return formatter.date(from: dateAdded)
+        // 1) ISO8601 with fractional seconds (e.g., 2024-10-18T12:34:56.123456Z or +00:00)
+        let isoWithFraction = ISO8601DateFormatter()
+        isoWithFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = isoWithFraction.date(from: dateAdded) {
+            return d
+        }
+
+        // 2) ISO8601 without fractional seconds
+        let isoNoFraction = ISO8601DateFormatter()
+        isoNoFraction.formatOptions = [.withInternetDateTime]
+        if let d = isoNoFraction.date(from: dateAdded) {
+            return d
+        }
+
+        // 3) Common fallback formats from DB exports (keep POSIX to avoid locale issues)
+        let posix = Locale(identifier: "en_US_POSIX")
+        let df = DateFormatter()
+        df.locale = posix
+        df.timeZone = TimeZone(secondsFromGMT: 0)
+
+        let candidates = [
+            // With fractional seconds
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXXXX",
+            "yyyy-MM-dd HH:mm:ss.SSSSSSXXXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX",
+            "yyyy-MM-dd HH:mm:ss.SSSXXXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ssXXXXX",   // 2024-10-18T12:34:56+00:00
+            "yyyy-MM-dd HH:mm:ssXXXXX",    // 2024-10-18 12:34:56+00:00
+            "yyyy-MM-dd HH:mm:ss",         // 2024-10-18 12:34:56
+            "yyyy-MM-dd"                    // 2024-10-18
+        ]
+
+        for format in candidates {
+            df.dateFormat = format
+            if let d = df.date(from: dateAdded) {
+                return d
+            }
+        }
+
+        return nil
     }
 }
 

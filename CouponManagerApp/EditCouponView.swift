@@ -724,8 +724,27 @@ struct EditCouponView: View {
                     print("📝 Update response: \(jsonString)")
                 }
                 
-                self.successMessage = "הקופון עודכן בהצלחה!"
-                self.onUpdate()
+                // If value changed, mirror web behavior: upsert initial recharge record
+                let originalValue = self.coupon.value
+                let newValue = Double(self.value) ?? originalValue
+                if abs(newValue - originalValue) > 0.0001 {
+                    print("🔁 Coupon value changed from \(originalValue) to \(newValue). Updating initial recharge transaction...")
+                    self.couponAPI.upsertInitialRechargeTransaction(couponId: self.coupon.id, value: newValue) { result in
+                        DispatchQueue.main.async {
+                            switch result {
+                            case .success:
+                                print("✅ Initial recharge transaction upserted for coupon \(self.coupon.id)")
+                            case .failure(let err):
+                                print("❌ Failed to upsert initial recharge transaction: \(err)")
+                            }
+                            self.successMessage = "הקופון עודכן בהצלחה!"
+                            self.onUpdate()
+                        }
+                    }
+                } else {
+                    self.successMessage = "הקופון עודכן בהצלחה!"
+                    self.onUpdate()
+                }
             }
         }.resume()
     }
