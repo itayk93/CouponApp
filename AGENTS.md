@@ -48,6 +48,25 @@ git push origin main
 - Do not commit `Secrets.swift` with live keys; load from bundle/xcconfig.
 - Use GitHub Secrets for CI; `.env.example` documents required env for scripts.
 
+## Git Hooks: Pre-commit Secret/Artifacts Guard
+- Purpose: blocks accidental commits of secrets and build artifacts.
+- Installed script: `Scripts/pre-commit.sh`.
+- Blocks:
+  - Non-example `.xcconfig` files (only commit `Config.xcconfig.example`).
+  - Build artifacts: `build/`, `*/build/`, `.xcarchive`, `.ipa`, `.app`.
+  - Added lines matching common secret patterns (examples):
+    - OpenAI keys `sk-...`, GitHub tokens `ghp_...`, AWS `AKIA...`/`aws_secret_access_key`.
+    - Private keys (`-----BEGIN ... PRIVATE KEY-----`, `BEGIN OPENSSH PRIVATE KEY`).
+    - Bearer tokens, JWT-like `SUPABASE_ANON_KEY` values, hardcoded passwords.
+- Install or update locally:
+  - `cp Scripts/pre-commit.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
+- Bypass in emergencies: append `--no-verify` to `git commit` (avoid unless necessary).
+
+### Secret Hygiene Checklist
+- Keep live credentials only in `Config.xcconfig` (ignored) or environment variables.
+- Use placeholders in committed files and docs; never real credentials.
+- Ensure `build/` is ignored and never committed.
+
 ## Language Policy
 - All code comments, docstrings, and TODOs must be written in English only.
 - Commit messages, PR titles, and PR descriptions must also be in English.
