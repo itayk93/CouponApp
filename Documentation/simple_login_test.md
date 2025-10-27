@@ -10,11 +10,16 @@ curl https://www.couponmasteril.com/api/debug/user/1
 כשזה יחזיר JSON במקום 404, השרת עודכן.
 
 ## שלב 2: בדיקת התחברות
+אזהרה: אין לכלול פרטי התחברות אמיתיים בקבצי התיעוד!
+
+השתמשו בפרטי דמה בלבד כדוגמה:
 ```bash
 curl -X POST https://www.couponmasteril.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"itayk93@gmail.com","password":"I637@A18!"}'
+  -d '{"email":"user@example.com","password":"<password>"}'
 ```
+
+אם אתם מבצעים בדיקה אמיתית, ספקו את הפרטים דרך משתני סביבה/כלים מקומיים בלבד, ולא בתיעוד.
 
 ## שלב 3: יצירת פרויקט iOS חדש
 אם הכל עובד בשרת, נוכל ליצור פרויקט iOS פשוט חדש.

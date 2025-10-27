@@ -20,6 +20,15 @@ struct QuickUsageView: View {
                 .cornerRadius(8)
 
             HStack {
+                // In RTL, primary action should appear on the right.
+                Button(role: .none, action: { Task { await vm.confirmSelection(reportUsage: reportUsage) } }) {
+                    Label("אשר שימוש", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .disabled(vm.selectedCouponIds.isEmpty)
+
+                Spacer()
+
                 Button(action: { Task { await vm.analyze() } }) {
                     if vm.isLoading {
                         ProgressView()
@@ -28,14 +37,6 @@ struct QuickUsageView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-
-                Spacer()
-
-                Button(role: .none, action: { Task { await vm.confirmSelection(reportUsage: reportUsage) } }) {
-                    Label("אשר שימוש", systemImage: "checkmark.circle.fill")
-                }
-                .buttonStyle(.bordered)
-                .disabled(vm.selectedCouponIds.isEmpty)
             }
 
             if let err = vm.errorMessage {

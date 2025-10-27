@@ -55,7 +55,6 @@ struct CouponManagerAppApp: App {
                 // Save pending coupon id to shared container so that after login we can resume navigation
                 if let sharedDefaults = AppGroupManager.shared.sharedUserDefaults {
                     sharedDefaults.set(couponId, forKey: "PendingCouponId")
-                    sharedDefaults.synchronize()
                     print("🔖 Saved pending coupon id: \(couponId) to shared container")
                 } else {
                     // Fallback to standard defaults

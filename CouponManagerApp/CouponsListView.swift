@@ -188,6 +188,7 @@ struct CouponsListView: View {
                     user: user,
                     coupons: coupons.filter { !$0.isForSale }
                 )
+                .environment(\.layoutDirection, .rightToLeft)
             }
             .sheet(isPresented: $showingProfile) {
                 ProfileView(user: user) {
@@ -213,7 +214,6 @@ struct CouponsListView: View {
                 setupNotifications()
                 
                 // Ensure user data is saved to shared container every time the app appears
-                print("🔐 APP: CouponsListView appeared - ensuring user data is saved to shared container")
                 AppGroupManager.shared.saveCurrentUserToSharedContainer(user)
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToHome"))) { _ in
@@ -288,19 +288,30 @@ struct CouponsListView: View {
                 Image(systemName: "house.fill")
                     .font(.system(size: 20))
                     .foregroundColor(headerTextColor)
-                
+
                 Text("ברוך הבא, \(user.firstName ?? "")")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(headerTextColor)
             }
-            
+
             Spacer()
-            
-            // Profile button (right side)
-            Button(action: { showingProfile = true }) {
-                Image(systemName: "person.circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(headerTextColor)
+
+            // Profile + Stats buttons (right side)
+            HStack(spacing: 14) {
+                // Statistics ("על מה חסכת?")
+                Button(action: { showingSavingsReport = true }) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(headerTextColor)
+                        .accessibilityLabel("סטטיסטיקות חיסכון")
+                }
+
+                // Profile
+                Button(action: { showingProfile = true }) {
+                    Image(systemName: "person.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(headerTextColor)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -366,7 +377,7 @@ struct CouponsListView: View {
                 .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
             }
             
-            // Three action buttons (identical to website)
+            // Two primary action buttons (quick add + quick usage)
             HStack(spacing: 12) {
                 // Green button - Quick Add Coupon
                 ActionButton(
@@ -384,15 +395,6 @@ struct CouponsListView: View {
                     color: .orange
                 ) {
                     showingQuickUsageReport = true
-                }
-                
-                // Blue button - What did you save on?
-                ActionButton(
-                    title: "על מה חסכת?",
-                    icon: "list.bullet",
-                    color: Color.appBlue
-                ) {
-                    showingSavingsReport = true
                 }
             }
         }
@@ -621,7 +623,6 @@ struct CouponsListView: View {
         errorMessage = ""
         
         // Save current user to shared container for widget access
-        print("🔄 MAIN: Saving user to shared container from loadData()")
         AppGroupManager.shared.saveCurrentUserToSharedContainer(user)
         
         let group = DispatchGroup()
@@ -631,7 +632,6 @@ struct CouponsListView: View {
         couponAPI.fetchAllUserCoupons(userId: user.id) { result in
             switch result {
             case .success(let fetchedCoupons):
-                print("✅ Loaded ALL \(fetchedCoupons.count) coupons from API")
                 self.coupons = fetchedCoupons
                 // All coupons loaded at once - no need for hasMoreCoupons tracking
                 
@@ -669,7 +669,6 @@ struct CouponsListView: View {
                 switch result {
                 case .success(let totalValue):
                     self.totalRemainingValue = totalValue
-                    print("✅ Loaded total remaining value: ₪\(totalValue)")
                 case .failure(let error):
                     print("❌ Failed to load total value: \(error)")
                     // Fallback to calculating from loaded coupons if API fails
@@ -733,7 +732,6 @@ struct CouponsListView: View {
             // Remove pending id now that we've consumed it
             if let sharedDefaults = AppGroupManager.shared.sharedUserDefaults {
                 sharedDefaults.removeObject(forKey: "PendingCouponId")
-                sharedDefaults.synchronize()
             }
             UserDefaults.standard.removeObject(forKey: "PendingCouponId")
         } else {
@@ -846,10 +844,8 @@ struct CouponsListView: View {
     
     // MARK: - Notification and Expiration Functions
     private func setupNotifications() {
-        print("🚀 Setting up notifications...")
         Task {
             let granted = await notificationManager.requestAuthorization()
-            print("🔔 Notification permission granted: \(granted)")
             if granted {
                 updateNotifications()
             } else {
@@ -859,7 +855,6 @@ struct CouponsListView: View {
     }
     
     private func updateNotifications() {
-        print("🔄 Updating notifications...")
         guard notificationManager.authorizationStatus == .authorized else { 
             print("❌ Cannot update notifications - not authorized")
             return 
@@ -1130,11 +1125,19 @@ struct ModernCouponCard: View {
                         Spacer()
                     }
                     
-                    // Company name
-                    HStack {
+                    // Company name + special message indicator
+                    HStack(spacing: 6) {
                         Text(coupon.company)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.primary)
+
+                        if let msg = coupon.specialMessage, !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Image(systemName: "star.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 12, weight: .bold))
+                                .accessibilityLabel("יש הודעה חשובה")
+                        }
+
                         Spacer()
                     }
                     

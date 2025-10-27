@@ -961,6 +961,8 @@ struct AddCouponView: View {
             straussCouponUrl: straussUrl.isEmpty ? nil : straussUrl,
             xgiftcardCouponUrl: xgiftcardUrl.isEmpty ? nil : xgiftcardUrl,
             xtraCouponUrl: powerGiftUrl.isEmpty ? xtraUrl.isEmpty ? nil : xtraUrl : powerGiftUrl,
+            cvv: includeCardInfo && !cvv.isEmpty ? cvv : nil,
+            cardExp: includeCardInfo && !cardExpiry.isEmpty ? cardExpiry : nil,
             isForSale: false, // Removed isForSale option
             isOneTime: isOneTime,
             purpose: purpose.isEmpty ? nil : purpose,

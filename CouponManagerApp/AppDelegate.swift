@@ -31,9 +31,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
-    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("❌ Failed to register for remote notifications: \(error.localizedDescription)")
-    }
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) { }
     
     private func updateUserPushToken(_ token: String) async {
         guard let user = AppGroupManager.shared.getCurrentUserFromSharedContainer() else {

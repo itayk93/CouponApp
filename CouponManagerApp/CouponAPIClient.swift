@@ -34,6 +34,7 @@ class CouponAPIClient: ObservableObject {
     func fetchAllUserCoupons(userId: Int, completion: @escaping (Result<[Coupon], Error>) -> Void) {
         // Remove limit and offset to get ALL coupons
         let urlString = "\(baseURL)/rest/v1/coupon?user_id=eq.\(userId)&select=*&order=date_added.desc"
+        AppLogger.log("📡 Supabase query (ALL coupons): \(urlString)")
         
         guard let url = URL(string: urlString) else {
             completion(.failure(URLError(.badURL)))
@@ -46,7 +47,7 @@ class CouponAPIClient: ObservableObject {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
         
-        print("🎫 Fetching ALL coupons for user \(userId) (no pagination)")
+        
         
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
@@ -63,14 +64,11 @@ class CouponAPIClient: ObservableObject {
                 return
             }
             
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("📨 ALL Coupons response: \(String(jsonString.prefix(200)))...")
-            }
+            if let _ = String(data: data, encoding: .utf8) { }
             
             do {
                 let coupons = try JSONDecoder().decode([Coupon].self, from: data)
                 DispatchQueue.main.async {
-                    print("✅ Loaded ALL \(coupons.count) coupons for user \(userId)")
                     completion(.success(coupons))
                 }
             } catch {
@@ -86,6 +84,7 @@ class CouponAPIClient: ObservableObject {
     func fetchUserCoupons(userId: Int, page: Int = 0, pageSize: Int = 50, completion: @escaping (Result<[Coupon], Error>) -> Void) {
         let offset = page * pageSize
         let urlString = "\(baseURL)/rest/v1/coupon?user_id=eq.\(userId)&select=*&order=date_added.desc&limit=\(pageSize)&offset=\(offset)"
+        AppLogger.log("📡 Supabase query (paginated coupons): \(urlString)")
         
         guard let url = URL(string: urlString) else {
             completion(.failure(URLError(.badURL)))
@@ -285,15 +284,60 @@ class CouponAPIClient: ObservableObject {
             }
             
             do {
+                // Primary: Expect an array response
                 let stats = try JSONDecoder().decode([CompanyUsageStats].self, from: data)
-                DispatchQueue.main.async {
-                    completion(.success(stats))
-                }
+                DispatchQueue.main.async { completion(.success(stats)) }
             } catch {
-                print("❌ Company usage stats decode error: \(error)")
-                DispatchQueue.main.async {
-                    completion(.failure(error))
+                // Friendly fallback: handle PostgREST function-not-found error by returning an empty array
+                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let code = obj["code"] as? String, code == "PGRST202" {
+                    DispatchQueue.main.async { completion(.success([])) }
+                    return
                 }
+                // Fallbacks for alternate shapes
+                // 1) Wrapper object: { "stats": [ ... ] } or { "data": [ ... ] }
+                struct StatsWrapper: Codable { let stats: [CompanyUsageStats]?; let data: [CompanyUsageStats]? }
+                // 2) Dictionary keyed by company: { "CompanyName": { total_count, ... }, ... }
+                struct StatsPayload: Codable {
+                    let total_count: Int
+                    let paid_count: Int
+                    let free_count: Int
+                    let total_spent: Double
+                }
+                let decoder = JSONDecoder()
+                // Try wrapper
+                if let wrapper = try? decoder.decode(StatsWrapper.self, from: data),
+                   let wrapped = wrapper.stats ?? wrapper.data {
+                    DispatchQueue.main.async { completion(.success(wrapped)) }
+                    return
+                }
+                // Try dictionary keyed by company
+                if let dict = try? decoder.decode([String: StatsPayload].self, from: data) {
+                    let mapped: [CompanyUsageStats] = dict.map { key, value in
+                        CompanyUsageStats(
+                            company: key,
+                            totalCount: value.total_count,
+                            paidCount: value.paid_count,
+                            freeCount: value.free_count,
+                            totalSpent: value.total_spent
+                        )
+                    }
+                    // Keep order deterministic by totalCount desc, then company name
+                    let sorted = mapped.sorted { lhs, rhs in
+                        if lhs.totalCount == rhs.totalCount { return lhs.company < rhs.company }
+                        return lhs.totalCount > rhs.totalCount
+                    }
+                    DispatchQueue.main.async { completion(.success(sorted)) }
+                    return
+                }
+                // If all decodes failed, include raw payload for debugging
+                let raw = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+                let enrichedError = NSError(
+                    domain: "CouponAPI",
+                    code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to decode company usage stats. Raw: \(raw)"]
+                )
+                DispatchQueue.main.async { completion(.failure(enrichedError)) }
             }
         }.resume()
     }
@@ -396,6 +440,13 @@ class CouponAPIClient: ObservableObject {
             encryptedRequest.code = EncryptionManager.encryptString(couponRequest.code)
             if let description = couponRequest.description {
                 encryptedRequest.description = EncryptionManager.encryptString(description)
+            }
+            // Encrypt card details if provided
+            if let cvv = couponRequest.cvv, !cvv.isEmpty {
+                encryptedRequest.cvv = EncryptionManager.encryptString(cvv)
+            }
+            if let exp = couponRequest.cardExp, !exp.isEmpty {
+                encryptedRequest.cardExp = EncryptionManager.encryptString(exp)
             }
             
             // Encrypt URL fields
@@ -639,44 +690,80 @@ class CouponAPIClient: ObservableObject {
     }
     
     // MARK: - Update Coupon Usage
+    // Reads current used_value, increments locally, PATCHes numeric value, then logs usage with reason
     func updateCouponUsage(couponId: Int, usageRequest: CouponUsageRequest, completion: @escaping (Result<Void, Error>) -> Void) {
-        let urlString = "\(baseURL)/rest/v1/coupon?id=eq.\(couponId)"
-        
-        guard let url = URL(string: urlString) else {
+        // 1) Fetch current used_value
+        let fetchURLString = "\(baseURL)/rest/v1/coupon?id=eq.\(couponId)&select=used_value&limit=1"
+        guard let fetchURL = URL(string: fetchURLString) else {
             completion(.failure(URLError(.badURL)))
             return
         }
-        
-        // Calculate new used_value
-        let updateData = [
-            "used_value": "used_value + \(usageRequest.usedAmount)"
-        ]
-        
-        guard let requestData = try? JSONSerialization.data(withJSONObject: updateData) else {
-            completion(.failure(NSError(domain: "CouponAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize update data"])))
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(apiKey, forHTTPHeaderField: "apikey")
-        request.httpBody = requestData
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
+
+        var fetchReq = URLRequest(url: fetchURL)
+        fetchReq.httpMethod = "GET"
+        fetchReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        fetchReq.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        fetchReq.setValue(apiKey, forHTTPHeaderField: "apikey")
+
+        URLSession.shared.dataTask(with: fetchReq) { data, response, error in
             if let error = error {
-                DispatchQueue.main.async {
-                    completion(.failure(error))
-                }
+                DispatchQueue.main.async { completion(.failure(error)) }
                 return
             }
-            
-            // Also create usage record
-            self.createCouponUsage(couponId: couponId, usageRequest: usageRequest) { _ in
-                DispatchQueue.main.async {
-                    completion(.success(()))
+            guard let data = data else {
+                DispatchQueue.main.async { completion(.failure(URLError(.badServerResponse))) }
+                return
+            }
+            do {
+                // Expect an array with one object containing used_value
+                var currentUsed: Double = 0.0
+                if let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                   let obj = arr.first {
+                    if let dv = obj["used_value"] as? Double {
+                        currentUsed = dv
+                    } else if let iv = obj["used_value"] as? Int {
+                        currentUsed = Double(iv)
+                    } else if let sv = obj["used_value"] as? String, let dv = Double(sv) {
+                        currentUsed = dv
+                    }
                 }
+
+                let newUsed = currentUsed + usageRequest.usedAmount
+
+                // 2) PATCH numeric used_value
+                let patchURLString = "\(self.baseURL)/rest/v1/coupon?id=eq.\(couponId)"
+                guard let patchURL = URL(string: patchURLString) else {
+                    DispatchQueue.main.async { completion(.failure(URLError(.badURL))) }
+                    return
+                }
+                var patchReq = URLRequest(url: patchURL)
+                patchReq.httpMethod = "PATCH"
+                patchReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                patchReq.setValue("Bearer \(self.apiKey)", forHTTPHeaderField: "Authorization")
+                patchReq.setValue(self.apiKey, forHTTPHeaderField: "apikey")
+                let payload: [String: Any] = ["used_value": newUsed]
+                patchReq.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+                URLSession.shared.dataTask(with: patchReq) { _, _, patchErr in
+                    if let patchErr = patchErr {
+                        DispatchQueue.main.async { completion(.failure(patchErr)) }
+                        return
+                    }
+                    // 3) Create usage record with explicit reason in details
+                    var usageWithReason = usageRequest
+                    // Normalize details: prepend fixed reason and keep user's detail if present
+                    let baseReason = "עודכן באפליקציה"
+                    if let extra = usageRequest.details?.trimmingCharacters(in: .whitespacesAndNewlines), !extra.isEmpty {
+                        usageWithReason = CouponUsageRequest(usedAmount: usageRequest.usedAmount, action: "שימוש ידני", details: "\(baseReason) - \(extra)")
+                    } else {
+                        usageWithReason = CouponUsageRequest(usedAmount: usageRequest.usedAmount, action: "שימוש ידני", details: baseReason)
+                    }
+                    self.createCouponUsage(couponId: couponId, usageRequest: usageWithReason) { _ in
+                        DispatchQueue.main.async { completion(.success(())) }
+                    }
+                }.resume()
+            } catch {
+                DispatchQueue.main.async { completion(.failure(error)) }
             }
         }.resume()
     }
@@ -694,8 +781,9 @@ class CouponAPIClient: ObservableObject {
             "coupon_id": couponId,
             "used_amount": usageRequest.usedAmount,
             "timestamp": ISO8601DateFormatter().string(from: Date()),
-            "action": usageRequest.action ?? "use",
-            "details": usageRequest.details ?? ""
+            // Align with web app semantics: Hebrew action for manual entry
+            "action": usageRequest.action ?? "שימוש ידני",
+            "details": usageRequest.details ?? "עודכן באפליקציה"
         ] as [String : Any]
         
         guard let requestData = try? JSONSerialization.data(withJSONObject: usageData) else {

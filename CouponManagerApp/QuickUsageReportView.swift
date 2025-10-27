@@ -371,7 +371,7 @@ struct QuickUsageReportView: View {
             await MainActor.run {
                 // Remove the row that was just approved
                 if let idx = self.reviewRows.firstIndex(where: { $0.id == rowId }) {
-                    withAnimation { self.reviewRows.remove(at: idx) }
+                    withAnimation { _ = self.reviewRows.remove(at: idx) }
                 }
                 // If no more rows left, refresh and close
                 if self.reviewRows.isEmpty {

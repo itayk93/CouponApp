@@ -64,9 +64,9 @@ struct EditCouponView: View {
         _hasXtraUrl = State(initialValue: !(coupon.xtraCouponUrl?.isEmpty ?? true))
         _isOneTime = State(initialValue: coupon.isOneTime)
         _purpose = State(initialValue: coupon.purpose ?? "")
-        _includeCardInfo = State(initialValue: !(coupon.decryptedCvv?.isEmpty ?? true) || !(coupon.cardExp?.isEmpty ?? true))
+        _includeCardInfo = State(initialValue: !(coupon.decryptedCvv?.isEmpty ?? true) || !(coupon.decryptedCardExp?.isEmpty ?? true))
         _cvv = State(initialValue: coupon.decryptedCvv ?? "")
-        _cardExpiry = State(initialValue: coupon.cardExp ?? "")
+        _cardExpiry = State(initialValue: coupon.decryptedCardExp ?? "")
         
         // Calculate discount percentage
         let discountValue = coupon.value > 0 ? ((coupon.value - coupon.cost) / coupon.value) * 100 : 0
@@ -656,6 +656,7 @@ struct EditCouponView: View {
         let encryptedCode = EncryptionManager.encryptString(code)
         let encryptedDescription = description.isEmpty ? nil : EncryptionManager.encryptString(description)
         let encryptedCvv = cvv.isEmpty ? nil : EncryptionManager.encryptString(cvv)
+        let encryptedCardExp = (includeCardInfo && !cardExpiry.isEmpty) ? EncryptionManager.encryptString(cardExpiry) : nil
         
         // Encrypt URL fields
         let encryptedBuyMeUrl = buyMeUrl.isEmpty ? nil : EncryptionManager.encryptString(buyMeUrl)
@@ -678,7 +679,7 @@ struct EditCouponView: View {
             "is_one_time": isOneTime,
             "purpose": (isOneTime && !purpose.isEmpty) ? purpose : NSNull(),
             "cvv": encryptedCvv ?? NSNull(),
-            "card_exp": (includeCardInfo && !cardExpiry.isEmpty) ? cardExpiry : NSNull()
+            "card_exp": encryptedCardExp ?? NSNull()
         ]
         
         updateCouponAPI(updateData: updateData)

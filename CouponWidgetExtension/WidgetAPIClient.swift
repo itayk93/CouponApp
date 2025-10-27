@@ -199,8 +199,8 @@ class WidgetAPIClient {
             return widgetCoupons
             
         } catch {
-            if let jsonString = String(data: data, encoding: .utf8) {
-            }
+            // Keep original data for potential logging, but avoid unused variable
+            _ = String(data: data, encoding: .utf8)
             throw error
         }
     }
@@ -514,20 +514,14 @@ class WidgetAPIClient {
         print("🎯 WIDGET API: App group identifier: \(appGroupIdentifier)")
         
         // Force synchronization
-        sharedDefaults.synchronize()
+        // synchronize() is deprecated and not needed
         print("🎯 WIDGET API: UserDefaults synchronized")
         
         // Let's check all keys and their values for debugging
         let allKeys = sharedDefaults.dictionaryRepresentation()
         for (key, value) in allKeys.sorted(by: { $0.key < $1.key }) {
-            if key == "lastLoggedInUser" {
-                if let data = value as? Data {
-                    if let jsonString = String(data: data, encoding: .utf8) {
-                    }
-                } else {
-                }
-            } else {
-            }
+            // Intentionally no-op debug print; remove unused variables
+            _ = (key, value)
         }
         
         guard let userData = sharedDefaults.data(forKey: "lastLoggedInUser") else {
@@ -583,7 +577,7 @@ class WidgetAPIClient {
             print("🔄 WIDGET API: Attempting to copy user data to shared container...")
             if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) {
                 sharedDefaults.set(userData, forKey: "lastLoggedInUser")
-                sharedDefaults.synchronize()
+                // synchronize() is deprecated and not needed
                 print("✅ WIDGET API: Copied user data to shared container")
             }
             
@@ -625,7 +619,7 @@ class WidgetAPIClient {
                 if let simpleUserData = try? JSONEncoder().encode(simpleUser),
                    let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) {
                     sharedDefaults.set(simpleUserData, forKey: "lastLoggedInUser")
-                    sharedDefaults.synchronize()
+                    // synchronize() is deprecated and not needed
                     print("✅ WIDGET API: Converted and saved full user to shared container as SimpleUser")
                 }
                 

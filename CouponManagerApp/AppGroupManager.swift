@@ -41,13 +41,12 @@ class AppGroupManager {
         
         if let data = try? JSONEncoder().encode(widgetCoupons) {
             sharedDefaults.set(data, forKey: userDefaultsKey)
-            sharedDefaults.synchronize()
-            print("✅ Saved \(widgetCoupons.count) coupons to shared container")
+            
             
             // Verify the save
             if let savedData = sharedDefaults.data(forKey: userDefaultsKey),
                let savedCoupons = try? JSONDecoder().decode([WidgetCoupon].self, from: savedData) {
-                print("✅ Verified: \(savedCoupons.count) coupons in shared container")
+                
                 _ = savedCoupons.filter { $0.showInWidget == true }.count
             } else {
                 print("❌ Failed to verify saved data")
@@ -184,61 +183,31 @@ class AppGroupManager {
             email: user.email
         )
         
-        print("🔐 APP: Created SimpleUser: id=\(simpleUser.id), username='\(simpleUser.username)', email='\(simpleUser.email)'")
+        
         
         do {
             let data = try JSONEncoder().encode(simpleUser)
-            print("🔐 APP: Successfully encoded user data (\(data.count) bytes)")
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("🔐 APP: User JSON data: \(jsonString)")
-            }
+            
+            if let _ = String(data: data, encoding: .utf8) { }
             
             // Try to save
-            print("🔐 APP: Attempting to save to shared container with key 'lastLoggedInUser'...")
+            
             sharedDefaults.set(data, forKey: "lastLoggedInUser")
             
             // Force synchronize
-            print("🔐 APP: Synchronizing shared container...")
-            let syncResult = sharedDefaults.synchronize()
-            print("🔐 APP: Synchronize result: \(syncResult)")
+            // no-op: synchronize() is deprecated and unnecessary on iOS
             
-            print("✅ APP: Saved user to shared container: \(simpleUser.username) (ID: \(simpleUser.id))")
+            
             
             // Wait a moment and verify the save
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                print("🔐 APP: Verifying save after delay...")
-                if let savedData = sharedDefaults.data(forKey: "lastLoggedInUser") {
-                    print("✅ APP: Found saved data (\(savedData.count) bytes)")
-                    if let savedUser = try? JSONDecoder().decode(SimpleUser.self, from: savedData) {
-                        print("✅ APP: Verified user save: \(savedUser.username) (ID: \(savedUser.id))")
-                    } else {
-                        print("❌ APP: Found data but failed to decode")
-                    }
-                } else {
-                    print("❌ APP: No data found after save - this indicates a problem!")
-                }
-                
-                // Show all keys in container for debugging
-                let allKeys = sharedDefaults.dictionaryRepresentation().keys.sorted()
-                print("🔐 APP: All keys in shared container after save (\(allKeys.count) total): \(allKeys)")
-                
-                // Also show some values for debugging
-                for key in allKeys {
-                    let value = sharedDefaults.object(forKey: key)
-                    if key == "lastLoggedInUser" {
-                        if let data = value as? Data {
-                            print("   📍 \(key): Data(\(data.count) bytes)")
-                        } else {
-                            print("   📍 \(key): \(value ?? "nil") (type: \(type(of: value)))")
-                        }
-                    } else {
-                        print("   📋 \(key): \(type(of: value))")
-                    }
+                if let _ = sharedDefaults.data(forKey: "lastLoggedInUser") {
+                    _ = try? JSONDecoder().decode(SimpleUser.self, from: sharedDefaults.data(forKey: "lastLoggedInUser") ?? Data())
                 }
             }
             
             // Force refresh widget timelines after saving user
-            print("🔄 APP: Triggering widget refresh after user save...")
+            
             refreshWidgetTimelines()
             
         } catch {
@@ -249,7 +218,7 @@ class AppGroupManager {
     // MARK: - Widget Management
     
     func refreshWidgetTimelines() {
-        print("🔄 Refreshing widget timelines...")
+        
         WidgetCenter.shared.reloadAllTimelines()
     }
 }
@@ -285,6 +254,8 @@ extension AppGroupManager {
         }
         
         var isFullyUsed: Bool {
+            // Mirror app logic: one-time coupons are not determined by value
+            if isOneTime { return false }
             return usedValue >= value
         }
         

@@ -26,11 +26,8 @@ class FaceIDManager: ObservableObject {
         
         isFaceIDAvailable = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
         
-        if let error = error {
-            print("Face ID availability error: \(error.localizedDescription)")
-        }
+        if let _ = error { }
         
-        print("Face ID available: \(isFaceIDAvailable)")
     }
     
     // MARK: - Authenticate with Face ID
@@ -165,13 +162,13 @@ class FaceIDManager: ObservableObject {
                     // Also sync with UserDefaults
                     UserDefaults.standard.set(faceIdEnabled, forKey: "faceID_enabled_\(userId)")
                 }
-                print("✅ Loaded Face ID preference from server: \(faceIdEnabled)")
+                
             } else {
                 // Fallback to UserDefaults if server doesn't have the data
                 DispatchQueue.main.async {
                     self.isFaceIDEnabled = UserDefaults.standard.bool(forKey: "faceID_enabled_\(userId)")
                 }
-                print("⚠️ Face ID preference not found on server, using local default")
+                
             }
         } catch {
             print("❌ Error loading Face ID preference: \(error.localizedDescription)")

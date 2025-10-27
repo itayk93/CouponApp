@@ -137,10 +137,7 @@ class GlobalNotificationSettings: ObservableObject {
         expirationDayHour = UserDefaults.standard.object(forKey: expirationHourKey) as? Int ?? 10
         expirationDayMinute = UserDefaults.standard.object(forKey: expirationMinuteKey) as? Int ?? 0
         
-        print("🌍 Global notification settings loaded:")
-        print("   Daily: \(String(format: "%02d:%02d", dailyNotificationHour, dailyNotificationMinute))")
-        print("   Monthly: \(String(format: "%02d:%02d", monthlyNotificationHour, monthlyNotificationMinute))")
-        print("   Expiration: \(String(format: "%02d:%02d", expirationDayHour, expirationDayMinute))")
+        
     }
     
     // Get formatted time strings

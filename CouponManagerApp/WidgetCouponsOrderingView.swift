@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 import WidgetKit
 
 struct WidgetCouponsOrderingView: View {
@@ -17,10 +18,15 @@ struct WidgetCouponsOrderingView: View {
     @State private var allCompanies: [Company] = []
     @State private var isLoading = false
     @State private var showingCouponDetail: Coupon?
+    // Force rebuild of the ordered list when order changes to reflect UI immediately
+    @State private var orderingVersion: Int = 0
     @Environment(\.presentationMode) var presentationMode
     
     private var activeCoupons: [Coupon] {
-        allCoupons.filter { $0.status == "פעיל" && !$0.isExpired && !$0.isFullyUsed }
+        // Show active coupons (including one-time). Exclude used and expired.
+        allCoupons.filter { coupon in
+            coupon.status == "פעיל" && !coupon.isExpired && (!coupon.isFullyUsed || coupon.isOneTime)
+        }
     }
     
     private var widgetCoupons: [Coupon] {
@@ -41,7 +47,7 @@ struct WidgetCouponsOrderingView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
-                        VStack(alignment: .trailing, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 20) {
                             headerSection
                             
                             if !widgetCoupons.isEmpty {
@@ -51,6 +57,7 @@ struct WidgetCouponsOrderingView: View {
                             availableCouponsSection
                         }
                         .padding()
+                        .multilineTextAlignment(.leading)
                     }
                 }
             }
@@ -98,6 +105,7 @@ struct WidgetCouponsOrderingView: View {
                         .foregroundColor(.secondary)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             
             HStack(spacing: 20) {
                 VStack {
@@ -133,18 +141,20 @@ struct WidgetCouponsOrderingView: View {
     
     // MARK: - Ordered Coupons Section
     private var orderedCouponsSection: some View {
-        VStack(alignment: .trailing, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .trailing, spacing: 4) {
                 Text("קופונים נבחרים (לפי סדר הצגה)")
                     .font(.headline)
                     .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 
                 Text("גרור קופון או השתמש בחצים")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             
-            List {
+            VStack(spacing: 8) {
                 ForEach(Array(widgetCoupons.enumerated()), id: \.element.id) { index, coupon in
                     OrderedCouponRow(
                         coupon: coupon,
@@ -152,50 +162,63 @@ struct WidgetCouponsOrderingView: View {
                         position: index + 1,
                         canMoveUp: index > 0,
                         canMoveDown: index < widgetCoupons.count - 1,
-                        onTap: {
-                            showingCouponDetail = coupon
-                        },
-                        onRemove: {
-                            toggleCouponInWidget(coupon)
-                        },
-                        onMoveUp: {
-                            moveItem(from: index, to: index - 1)
-                        },
-                        onMoveDown: {
-                            moveItem(from: index, to: index + 1)
-                        }
+                        onTap: { showingCouponDetail = coupon },
+                        onRemove: { toggleCouponInWidget(coupon) },
+                        onMoveUp: { moveItem(from: index, to: index - 1) },
+                        onMoveDown: { moveItem(from: index, to: index + 1) },
+                        onMoveToTop: { moveItemToTop(index: index) },
+                        onMoveToBottom: { moveItemToBottom(index: index) }
                     )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                }
-                .onMove { source, destination in
-                    moveItemByDrag(from: source, to: destination)
+                    // Enable drag-and-drop reordering within the selected list
+                    .onDrag {
+                        // Provide the coupon id as text for local drag
+                        return NSItemProvider(object: NSString(string: String(coupon.id)))
+                    }
+                    .onDrop(of: [UTType.text], isTargeted: nil) { providers in
+                        guard let provider = providers.first else { return false }
+                        // Load the dragged coupon id and perform move
+                        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                            if let strObj = object as? NSString, let sourceId = Int(strObj as String) {
+                                DispatchQueue.main.async {
+                                    if let sourceIndex = self.widgetCoupons.firstIndex(where: { $0.id == sourceId }) {
+                                        let destinationIndex = index
+                                        if sourceIndex != destinationIndex {
+                                            self.moveItem(from: sourceIndex, to: destinationIndex)
+                                        }
+                                    }
+                                }
+                                // Perform move asynchronously; return value is handled below
+                            }
+                        }
+                        // Return true to accept the drop; the actual move is handled asynchronously above
+                        return true
+                    }
                 }
             }
-            .listStyle(PlainListStyle())
-            .frame(height: CGFloat(widgetCoupons.count * 100 + 20))
-            .scrollDisabled(true)
+            // Recreate the list view hierarchy when version changes (fixes SwiftUI stale layout in ScrollView)
+            .id(orderingVersion)
             
             if widgetCoupons.count >= 2 {
                 Text("ווידג'ט בינוני יציג את קופונים 1-2")
                     .font(.caption)
                     .foregroundColor(.orange)
                     .padding(.top, 8)
-                
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text("ווידג'ט גדול יציג את כל 4 הקופונים")
                     .font(.caption)
                     .foregroundColor(.green)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
     
     // MARK: - Available Coupons Section
     private var availableCouponsSection: some View {
-        VStack(alignment: .trailing, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("קופונים זמינים")
                 .font(.headline)
                 .fontWeight(.semibold)
+                .frame(maxWidth: .infinity, alignment: .leading)
             
             let availableCoupons = activeCoupons.filter { $0.showInWidget != true }
             
@@ -237,7 +260,7 @@ struct WidgetCouponsOrderingView: View {
         let group = DispatchGroup()
         
         group.enter()
-        couponAPI.fetchUserCoupons(userId: user.id) { result in
+        couponAPI.fetchAllUserCoupons(userId: user.id) { result in
             switch result {
             case .success(let coupons):
                 let usedCouponsToUpdate = coupons.filter {
@@ -265,7 +288,7 @@ struct WidgetCouponsOrderingView: View {
                     
                     updateGroup.notify(queue: .main) {
                         // Re-fetch all coupons after the updates to get the latest state
-                        self.couponAPI.fetchUserCoupons(userId: self.user.id) { finalResult in
+                        self.couponAPI.fetchAllUserCoupons(userId: self.user.id) { finalResult in
                             switch finalResult {
                             case .success(let finalCoupons):
                                 self.allCoupons = finalCoupons
@@ -301,37 +324,61 @@ struct WidgetCouponsOrderingView: View {
     }
     
     private func toggleCouponInWidget(_ coupon: Coupon) {
-        let newValue = !(coupon.showInWidget ?? false)
-        
-        if newValue && widgetCoupons.count >= 4 {
-            return
-        }
-        
-        let newOrder = newValue ? (widgetCoupons.count + 1) : nil
-        
+        let wasInWidget = (coupon.showInWidget ?? false)
+        let newValue = !wasInWidget
+
+        // Respect max 4 selection
+        if newValue && widgetCoupons.count >= 4 { return }
+
+        // Compute next order by max existing, not just count
+        let maxOrder = widgetCoupons.compactMap { $0.widgetDisplayOrder }.max() ?? 0
+        let newOrder: Int? = newValue ? (maxOrder + 1) : nil
+
+        // Prepare server payload (nullify order when removing)
         var updateData: [String: Any] = ["show_in_widget": newValue]
-        if let order = newOrder {
-            updateData["widget_display_order"] = order
+        updateData["widget_display_order"] = newOrder ?? NSNull()
+
+        // Optimistic local update (ensure @State reassign for UI refresh)
+        if let index = allCoupons.firstIndex(where: { $0.id == coupon.id }) {
+            var local = allCoupons
+            var updated = local[index]
+            updated.showInWidget = newValue
+            updated.widgetDisplayOrder = newOrder
+            local[index] = updated
+
+            // Keep sequential orders locally for stable UI
+            if newValue {
+                var seq = widgetCoupons + [updated]
+                seq = seq.sorted { ($0.widgetDisplayOrder ?? 999) < ($1.widgetDisplayOrder ?? 999) }
+                for (i, item) in seq.enumerated() {
+                    if let idx = local.firstIndex(where: { $0.id == item.id }) {
+                        local[idx].widgetDisplayOrder = i + 1
+                    }
+                }
+            }
+            withAnimation {
+                allCoupons = local
+                orderingVersion &+= 1
+            }
         }
-        
+
+        // Persist to server
         couponAPI.updateCoupon(couponId: coupon.id, data: updateData) { result in
             switch result {
             case .success:
-                if let index = allCoupons.firstIndex(where: { $0.id == coupon.id }) {
-                    var updatedCoupon = allCoupons[index]
-                    updatedCoupon.showInWidget = newValue
-                    updatedCoupon.widgetDisplayOrder = newOrder
-                    allCoupons[index] = updatedCoupon
-                }
-                
                 saveToSharedContainer()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    reloadWidget()
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { reloadWidget() }
                 onUpdate()
-                
+                // Ensure latest state from server (defensive)
+                DispatchQueue.main.async { loadCoupons() }
             case .failure(let error):
-                print("Failed to update show_in_widget: \(error)")
+                print("❌ Failed to update show_in_widget: \(error)")
+                // Revert on failure
+                if let index = allCoupons.firstIndex(where: { $0.id == coupon.id }) {
+                    var reverted = allCoupons[index]
+                    reverted.showInWidget = wasInWidget
+                    allCoupons[index] = reverted
+                }
             }
         }
     }
@@ -357,6 +404,8 @@ struct WidgetCouponsOrderingView: View {
         updates.append((couponId: sourceCoupon.id, order: destinationOrder))
         updates.append((couponId: destinationCoupon.id, order: sourceOrder))
         
+        // Optimistic local update for instant UI feedback
+        applyLocalOrderUpdates(updates)
         updateCouponOrders(updates: updates)
     }
     
@@ -380,7 +429,61 @@ struct WidgetCouponsOrderingView: View {
             updates.append((couponId: coupon.id, order: index + 1))
         }
         
+        // Optimistic local update for instant UI feedback
+        applyLocalOrderUpdates(updates)
         updateCouponOrders(updates: updates)
+    }
+
+    private func moveItemToTop(index: Int) {
+        guard index > 0 && index < widgetCoupons.count else { return }
+        var updates: [(couponId: Int, order: Int)] = []
+        let sorted = widgetCoupons
+        // Selected item goes to order 1
+        updates.append((couponId: sorted[index].id, order: 1))
+        // Shift down the ones that were above it
+        for i in 0..<index {
+            updates.append((couponId: sorted[i].id, order: i + 2))
+        }
+        // Keep the rest as-is
+        for i in (index + 1)..<sorted.count {
+            updates.append((couponId: sorted[i].id, order: i + 1))
+        }
+        // Optimistic local update for instant UI feedback
+        applyLocalOrderUpdates(updates)
+        updateCouponOrders(updates: updates)
+    }
+
+    private func moveItemToBottom(index: Int) {
+        guard index >= 0 && index < widgetCoupons.count - 1 else { return }
+        var updates: [(couponId: Int, order: Int)] = []
+        let sorted = widgetCoupons
+        let lastOrder = sorted.count
+        // Selected item goes to bottom
+        updates.append((couponId: sorted[index].id, order: lastOrder))
+        // Shift up the ones that were below it
+        for i in (index + 1)..<sorted.count {
+            updates.append((couponId: sorted[i].id, order: i))
+        }
+        // Keep the rest as-is
+        for i in 0..<index {
+            updates.append((couponId: sorted[i].id, order: i + 1))
+        }
+        // Optimistic local update for instant UI feedback
+        applyLocalOrderUpdates(updates)
+        updateCouponOrders(updates: updates)
+    }
+
+    private func applyLocalOrderUpdates(_ updates: [(couponId: Int, order: Int)]) {
+        var local = allCoupons
+        for update in updates {
+            if let idx = local.firstIndex(where: { $0.id == update.couponId }) {
+                local[idx].widgetDisplayOrder = update.order
+            }
+        }
+        withAnimation {
+            allCoupons = local
+            orderingVersion &+= 1
+        }
     }
     
     private func updateCouponOrders(updates: [(couponId: Int, order: Int)]) {
@@ -393,7 +496,9 @@ struct WidgetCouponsOrderingView: View {
                 switch result {
                 case .success:
                     if let index = allCoupons.firstIndex(where: { $0.id == update.couponId }) {
-                        allCoupons[index].widgetDisplayOrder = update.order
+                        var local = allCoupons
+                        local[index].widgetDisplayOrder = update.order
+                        DispatchQueue.main.async { withAnimation { allCoupons = local } }
                     }
                 case .failure(let error):
                     print("Failed to update order for coupon \(update.couponId): \(error)")
@@ -416,7 +521,7 @@ struct WidgetCouponsOrderingView: View {
     
     private func saveToSharedContainer() {
         print("💾 Saving updated coupons to shared container...")
-        couponAPI.fetchUserCoupons(userId: user.id) { fetchResult in
+        couponAPI.fetchAllUserCoupons(userId: user.id) { fetchResult in
             if case .success(let updatedCoupons) = fetchResult {
                 let widgetCoupons = updatedCoupons.filter { $0.showInWidget == true }
                     .sorted { coupon1, coupon2 in
@@ -465,6 +570,8 @@ struct OrderedCouponRow: View {
     let onRemove: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
+    let onMoveToTop: () -> Void
+    let onMoveToBottom: () -> Void
     
     var body: some View {
         HStack(spacing: 12) {
@@ -489,15 +596,25 @@ struct OrderedCouponRow: View {
             // Coupon content
             Button(action: onTap) {
                 HStack(spacing: 12) {
-                    // Company logo
-                    companyLogoView
-                    
+                    Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(coupon.company)
                             .font(.headline)
                             .foregroundColor(.primary)
-                            .multilineTextAlignment(.trailing)
-                        
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // Coupon code and expiration
+                        HStack(spacing: 6) {
+                            Text("קוד: \(coupon.decryptedCode)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("•")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("תוקף: \(coupon.formattedExpirationDateShort)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                         HStack {
                             if let expiration = coupon.expirationDate {
                                 let daysLeft = Calendar.current.dateComponents([.day], from: Date(), to: expiration).day ?? 0
@@ -507,14 +624,13 @@ struct OrderedCouponRow: View {
                                         .foregroundColor(.orange)
                                 }
                             }
-                            
                             Text("נותר ₪\(Int(coupon.remainingValue))")
                                 .font(.subheadline)
                                 .foregroundColor(.green)
                         }
                     }
-                    
-                    Spacer()
+                    // Logo on the left of the text (RTL-friendly)
+                    companyLogoView
                 }
             }
             .buttonStyle(PlainButtonStyle())
@@ -551,9 +667,25 @@ struct OrderedCouponRow: View {
         .background(Color.appBlue.opacity(0.1))
         .cornerRadius(12)
         .overlay(
+            // Make overlay ignore taps so buttons work
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.appBlue, lineWidth: 2)
+                .allowsHitTesting(false)
         )
+        .contextMenu {
+            if canMoveUp {
+                Button("העבר לראש הרשימה", action: onMoveToTop)
+            }
+            if canMoveDown {
+                Button("העבר לסוף הרשימה", action: onMoveToBottom)
+            }
+            Divider()
+            Button(role: .destructive) {
+                onRemove()
+            } label: {
+                Label("הסר מהווידג'ט", systemImage: "trash")
+            }
+        }
     }
     
     private var companyLogoView: some View {
@@ -617,14 +749,25 @@ struct AvailableCouponRow: View {
         HStack(spacing: 12) {
             Button(action: onTap) {
                 HStack(spacing: 12) {
-                    companyLogoView
-                    
+                    Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(coupon.company)
                             .font(.headline)
                             .foregroundColor(.primary)
-                            .multilineTextAlignment(.trailing)
-                        
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // Coupon code and expiration
+                        HStack(spacing: 6) {
+                            Text("קוד: \(coupon.decryptedCode)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("•")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("תוקף: \(coupon.formattedExpirationDateShort)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                         HStack {
                             if let expiration = coupon.expirationDate {
                                 let daysLeft = Calendar.current.dateComponents([.day], from: Date(), to: expiration).day ?? 0
@@ -634,14 +777,12 @@ struct AvailableCouponRow: View {
                                         .foregroundColor(.orange)
                                 }
                             }
-                            
                             Text("נותר ₪\(Int(coupon.remainingValue))")
                                 .font(.subheadline)
                                 .foregroundColor(.green)
                         }
                     }
-                    
-                    Spacer()
+                    companyLogoView
                 }
             }
             .buttonStyle(PlainButtonStyle())
@@ -660,6 +801,7 @@ struct AvailableCouponRow: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .allowsHitTesting(false)
         )
     }
     

@@ -180,7 +180,8 @@ struct Provider: TimelineProvider {
                     let activeCoupons = allCoupons.filter { $0.status == "פעיל" }
                     let activeCouponsCount = activeCoupons.count
                     let totalValue = activeCoupons.filter { !$0.isOneTime }.reduce(0.0) { $0 + $1.remainingValue }
-                    let widgetCoupons = allCoupons.filter { $0.showInWidget == true }
+                    // Show only coupons chosen for the widget that are still active and have a positive remaining value
+                    let widgetCoupons = allCoupons.filter { ($0.showInWidget == true) && ($0.status == "פעיל") && ($0.remainingValue > 0) }
                     let companies = try await WidgetAPIClient.shared.getCompanies()
                     
                     let entry = SimpleEntry(
@@ -232,8 +233,9 @@ struct Provider: TimelineProvider {
                 print("🎯 WIDGET: Active coupons = \(activeCouponsCount), Total value = ₪\(totalValue) (Corrected)")
                 
                 print("🎯 WIDGET: Step 4 - Filtering and ordering widget coupons")
+                // Show only selected coupons that are active and with a positive remaining value
                 let widgetCoupons = allCoupons
-                    .filter { $0.showInWidget == true }
+                    .filter { ($0.showInWidget == true) && ($0.status == "פעיל") && ($0.remainingValue > 0) }
                     .sorted { coupon1, coupon2 in
                         let order1 = coupon1.widgetDisplayOrder ?? 999
                         let order2 = coupon2.widgetDisplayOrder ?? 999
@@ -250,8 +252,7 @@ struct Provider: TimelineProvider {
                 let companies = try await WidgetAPIClient.shared.getCompanies()
                 debugLog += "Companies: \(companies.count)\n"
                 
-                for company in companies {
-                }
+                // Companies are fetched for logo matching below; no-op loop removed
                 
                 for coupon in widgetCoupons {
                     let normalizedCouponCompany = coupon.company.lowercased().trimmingCharacters(in: .whitespaces)
@@ -783,7 +784,7 @@ struct CouponMediumCardView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(coupon.company)
                         .couponFont(15, weight: .semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                         .lineLimit(1)
                     
                     Text("יתרה: \(Int(coupon.remainingValue))₪")

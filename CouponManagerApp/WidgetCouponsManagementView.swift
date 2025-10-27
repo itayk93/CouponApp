@@ -18,7 +18,9 @@ struct WidgetCouponsManagementView: View {
     @Environment(\.presentationMode) var presentationMode
     
     private var activeCoupons: [Coupon] {
-        allCoupons.filter { $0.status == "פעיל" && !$0.isExpired && !$0.isFullyUsed }
+        allCoupons.filter { c in
+            c.status == "פעיל" && !c.isExpired && (!c.isFullyUsed || c.isOneTime)
+        }
     }
     
     private var widgetCoupons: [Coupon] {
@@ -144,7 +146,7 @@ struct WidgetCouponsManagementView: View {
     // MARK: - Helper Functions
     private func loadCoupons() {
         isLoading = true
-        couponAPI.fetchUserCoupons(userId: user.id) { result in
+        couponAPI.fetchAllUserCoupons(userId: user.id) { result in
             isLoading = false
             switch result {
             case .success(let coupons):

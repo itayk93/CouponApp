@@ -31,9 +31,7 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         )
     }
     
-    @objc private func handleGlobalSettingsChange() {
-        print("🌍 Global notification settings changed - will update notifications on next refresh")
-    }
+    @objc private func handleGlobalSettingsChange() { }
     
     private func checkAuthorizationStatus() {
         center.getNotificationSettings { settings in
@@ -45,13 +43,10 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     
     func requestAuthorization() async -> Bool {
         do {
-            print("🔔 Requesting notification authorization...")
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             
             await MainActor.run {
                 authorizationStatus = granted ? .authorized : .denied
-                print("🔔 Authorization result: \(granted ? "Granted" : "Denied")")
-                print("🔔 Current status: \(authorizationStatus)")
             }
             
             return granted
@@ -65,7 +60,7 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     }
     
     func scheduleExpirationNotifications(for coupons: [Coupon]) {
-        print("📅 Scheduling notifications for \(coupons.count) coupons...")
+        
         
         // Cancel existing notifications
         center.removeAllPendingNotificationRequests()
@@ -84,7 +79,6 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             }
             
             let daysUntilExpiration = calendar.dateComponents([.day], from: now, to: expirationDate).day ?? 0
-            print("📊 Coupon \(coupon.id) (\(coupon.company)) expires in \(daysUntilExpiration) days")
             
             // Schedule monthly notification (30 days before)
             if daysUntilExpiration == 30 {
@@ -111,7 +105,7 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             }
         }
         
-        print("✅ Scheduled \(scheduledCount) notifications total")
+        
     }
     
     private func scheduleMonthlyNotification(for coupon: Coupon, expirationDate: Date) {

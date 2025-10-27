@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct LoginView: View {
@@ -316,6 +317,10 @@ struct LoginView: View {
             .background(backgroundColor)
             .navigationBarHidden(true)
             .environment(\.layoutDirection, .rightToLeft)
+            // Tap anywhere to dismiss the keyboard
+            .simultaneousGesture(TapGesture().onEnded {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            })
         }
         .onAppear {
             // Pre-fill for testing

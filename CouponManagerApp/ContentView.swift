@@ -110,11 +110,10 @@ struct ContentView: View {
     // Check the shared container for a pending coupon id saved by the widget deep link.
     private func handlePendingCouponIfAny(user: User) {
         var pendingId: Int? = nil
-        if let sharedDefaults = AppGroupManager.shared.sharedUserDefaults {
+                if let sharedDefaults = AppGroupManager.shared.sharedUserDefaults {
             if let val = sharedDefaults.object(forKey: "PendingCouponId") as? Int {
                 pendingId = val
                 sharedDefaults.removeObject(forKey: "PendingCouponId")
-                sharedDefaults.synchronize()
             }
         }
 

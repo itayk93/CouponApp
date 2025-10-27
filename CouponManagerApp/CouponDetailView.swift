@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import WidgetKit
 #if canImport(Charts)
 import Charts
@@ -34,6 +35,9 @@ struct CouponDetailView: View {
     @State private var showWidgetManagementSheet = false
     @State private var allCoupons: [Coupon] = []
     @State private var widgetStateChanged = false
+    @State private var showSpecialMessageEditor = false
+    @State private var specialMessageDraft: String = ""
+    @State private var specialMessageError: String? = nil
     
     // Initialize showInWidgetToggle with the coupon's current value
     init(coupon: Coupon, user: User, companies: [Company], onUpdate: @escaping () -> Void) {
@@ -49,7 +53,7 @@ struct CouponDetailView: View {
             VStack(spacing: 0) {
                 // Header with company info
                 companyHeader
-                
+
                 // Sale info if applicable
                 if coupon.isForSale {
                     saleInfoSection
@@ -91,6 +95,38 @@ struct CouponDetailView: View {
         }
         .sheet(isPresented: $showingShareSheet) {
             ShareSheet(activityItems: ["שיתוף קופון \(coupon.company)"])
+        }
+        .sheet(isPresented: $showSpecialMessageEditor) {
+            SpecialMessageEditor(
+                initialText: coupon.specialMessage ?? "",
+                onSave: { newText in
+                    let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let payload: [String: Any] = trimmed.isEmpty ? ["special_message": NSNull()] : ["special_message": trimmed]
+                    couponAPI.updateCoupon(couponId: coupon.id, data: payload) { result in
+                        switch result {
+                        case .success:
+                            self.coupon.specialMessage = trimmed.isEmpty ? nil : trimmed
+                            self.showSpecialMessageEditor = false
+                        case .failure(let error):
+                            print("❌ Failed to update special_message: \(error)")
+                            // Surface the error to the user instead of failing silently
+                            self.specialMessageError = "Failed to save message: \(error.localizedDescription)"
+                        }
+                    }
+                },
+                onCancel: { showSpecialMessageEditor = false }
+            )
+        }
+        // Error alert for special message save/delete failures
+        .alert(isPresented: Binding(
+            get: { specialMessageError != nil },
+            set: { _ in specialMessageError = nil }
+        )) {
+            Alert(
+                title: Text("שגיאת שמירה"),
+                message: Text(specialMessageError ?? ""),
+                dismissButton: .default(Text("אישור"))
+            )
         }
         .rtlAlert("מחיקת קופון",
                   isPresented: $showingDeleteAlert,
@@ -137,15 +173,14 @@ struct CouponDetailView: View {
             refreshCouponData()
         }
         .onDisappear {
-            // Call onUpdate when leaving the screen to refresh the main list
-            // But add a delay if widget state changed to allow DB update to complete
+            // Only refresh when widget state actually changed.
+            // Avoid triggering a full list reload on simple back navigation,
+            // which caused the navigation stack to pop to the main screen.
             if widgetStateChanged {
                 print("⏰ Widget state changed, waiting before refresh...")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     self.onUpdate()
                 }
-            } else {
-                onUpdate()
             }
         }
         .environment(\.layoutDirection, .rightToLeft)
@@ -340,6 +375,33 @@ struct CouponDetailView: View {
     // MARK: - Coupon Details Tab
     private var couponDetailsTab: some View {
         VStack(spacing: 16) {
+            // Special message banner or add button (shown only on details tab)
+            if let msg = coupon.specialMessage, !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                SpecialMessageBanner(message: msg) {
+                    if coupon.userId == user.id {
+                        specialMessageDraft = msg
+                        showSpecialMessageEditor = true
+                    }
+                }
+            } else if coupon.userId == user.id {
+                Button {
+                    specialMessageDraft = ""
+                    showSpecialMessageEditor = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.bubble")
+                            .foregroundColor(.blue)
+                        Text("הוסף הודעה מיוחדת")
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(8)
+                }
+            }
+
             // Show-in-widget toggle (only for the owner and active coupons)
             if coupon.userId == user.id && coupon.status == "פעיל" {
                 Toggle("הצג בווידג'ט", isOn: $showInWidgetToggle)
@@ -348,20 +410,25 @@ struct CouponDetailView: View {
                         updateShowInWidget(show: newValue)
                     }
             }
-            
+
+            // Usage percentage moved to the Coupon Details tab
             if !coupon.isForSale {
-                InfoBox(icon: "barcode", title: "קוד מוצר:", value: coupon.decryptedCode, isCopyable: true)
+                InfoBoxWithProgress(icon: "percent", title: "אחוז שימוש:", progress: coupon.usagePercentage / 100)
+            }
+
+            if !coupon.isForSale {
+                // Coupon code
+                InfoBox(icon: "barcode", title: "קוד קופון:", value: coupon.decryptedCode, isCopyable: true)
+                // Card fields directly under the code when available
+                if let cardExp = coupon.decryptedCardExp, !cardExp.isEmpty {
+                    InfoBox(icon: "calendar", title: "תוקף הכרטיס:", value: cardExp)
+                }
+                if let cvv = coupon.decryptedCvv, !cvv.isEmpty {
+                    InfoBox(icon: "lock", title: "CVV:", value: cvv)
+                }
             }
             
             InfoBox(icon: "building.2", title: "חברה:", value: coupon.company)
-            
-            if let cardExp = coupon.cardExp, !cardExp.isEmpty {
-                InfoBox(icon: "calendar", title: "תוקף הכרטיס:", value: cardExp)
-            }
-            
-            if let cvv = coupon.decryptedCvv, !cvv.isEmpty {
-                InfoBoxWithReveal(icon: "lock", title: "CVV:", value: cvv, isRevealed: $showCVV)
-            }
             
             if coupon.isOneTime {
                 InfoBox(icon: "target", title: "מטרת הקופון:", value: coupon.purpose ?? "")
@@ -466,9 +533,7 @@ struct CouponDetailView: View {
                 if let source = coupon.source, !source.isEmpty, source != "לא צוין" {
                     InfoBox(icon: "storefront", title: "מאיפה קיבלת את הקופון:", value: source)
                 }
-                
-                InfoBoxWithProgress(icon: "percent", title: "אחוז שימוש:", progress: coupon.usagePercentage / 100)
-                
+
                 InfoBox(icon: "calendar.badge.plus", title: "תאריך הזנה:", value: formatDate(coupon.dateAdded))
             }
             
@@ -497,7 +562,7 @@ struct CouponDetailView: View {
             }
             
             if let expiration = coupon.expiration, !expiration.isEmpty {
-                InfoBox(icon: "calendar", title: "תוקף עד:", value: expiration, isExpiring: coupon.isExpired)
+                InfoBox(icon: "calendar", title: "תוקף עד:", value: formatDate(expiration), isExpiring: coupon.isExpired)
             }
             
             if let description = coupon.decryptedDescription, !description.isEmpty, description != "nan" {
@@ -669,6 +734,37 @@ struct CouponDetailView: View {
         couponAPI.updateCouponUsage(couponId: coupon.id, usageRequest: usageRequest) { result in
             switch result {
             case .success:
+                // Optimistically update local coupon's usedValue so remaining reflects immediately
+                let updated = Coupon(
+                    id: coupon.id,
+                    code: coupon.code,
+                    description: coupon.description,
+                    value: coupon.value,
+                    cost: coupon.cost,
+                    company: coupon.company,
+                    expiration: coupon.expiration,
+                    source: coupon.source,
+                    buyMeCouponUrl: coupon.buyMeCouponUrl,
+                    straussCouponUrl: coupon.straussCouponUrl,
+                    xgiftcardCouponUrl: coupon.xgiftcardCouponUrl,
+                    xtraCouponUrl: coupon.xtraCouponUrl,
+                    dateAdded: coupon.dateAdded,
+                    usedValue: coupon.usedValue + amount,
+                    status: coupon.status,
+                    isAvailable: coupon.isAvailable,
+                    isForSale: coupon.isForSale,
+                    isOneTime: coupon.isOneTime,
+                    purpose: coupon.purpose,
+                    excludeSaving: coupon.excludeSaving,
+                    autoDownloadDetails: coupon.autoDownloadDetails,
+                    userId: coupon.userId,
+                    cvv: coupon.cvv,
+                    cardExp: coupon.cardExp,
+                    specialMessage: coupon.specialMessage,
+                    showInWidget: coupon.showInWidget,
+                    widgetDisplayOrder: coupon.widgetDisplayOrder
+                )
+                self.coupon = updated
                 onUpdate()
                 loadUsageHistory()
                 loadConsolidatedRows()
@@ -845,15 +941,57 @@ struct CouponDetailView: View {
     }
     
     private func formatDate(_ dateString: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: dateString) else {
+        // Try several parsers to cover values with/without milliseconds or timezone
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        var parsedDate: Date? = iso.date(from: dateString)
+
+        if parsedDate == nil {
+            // Try ISO8601 without fractional seconds
+            let isoNoFrac = ISO8601DateFormatter()
+            isoNoFrac.formatOptions = [.withInternetDateTime]
+            parsedDate = isoNoFrac.date(from: dateString)
+        }
+
+        if parsedDate == nil {
+            // Try custom formats without timezone
+            let df1 = DateFormatter()
+            df1.locale = Locale(identifier: "en_US_POSIX")
+            df1.timeZone = TimeZone(secondsFromGMT: 0)
+            df1.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS" // microseconds
+            parsedDate = df1.date(from: dateString)
+
+            if parsedDate == nil {
+                let df2 = DateFormatter()
+                df2.locale = Locale(identifier: "en_US_POSIX")
+                df2.timeZone = TimeZone(secondsFromGMT: 0)
+                df2.dateFormat = "yyyy-MM-dd'T'HH:mm:ss" // seconds only
+                parsedDate = df2.date(from: dateString)
+            }
+        }
+
+        if parsedDate == nil {
+            // Date-only (e.g., expiration "yyyy-MM-dd")
+            let df3 = DateFormatter()
+            df3.locale = Locale(identifier: "en_US_POSIX")
+            df3.timeZone = TimeZone(secondsFromGMT: 0)
+            df3.dateFormat = "yyyy-MM-dd"
+            parsedDate = df3.date(from: dateString)
+        }
+
+        guard let date = parsedDate else {
             return dateString
         }
-        
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        formatter.locale = Locale(identifier: "he_IL")
-        return formatter.string(from: date)
+
+        // Output in Hebrew (Israel) locale; include time only if string had time
+        let showTime = dateString.contains("T") || dateString.contains(":")
+        let out = DateFormatter()
+        out.locale = Locale(identifier: "he_IL")
+        out.timeZone = TimeZone.current
+        out.dateStyle = .medium
+        out.timeStyle = showTime ? .short : .none
+        return out.string(from: date)
     }
 }
 
@@ -1067,39 +1205,43 @@ struct TransactionRowView: View {
     }
     
     private func formatTimestamp(_ timestamp: String?) -> String {
-        guard let timestampStr = timestamp else { return "-" }
+        guard let ts = timestamp, !ts.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "-" }
 
-        let formatters = [
-            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ",
-            "yyyy-MM-dd'T'HH:mm:ssZ",
-            "yyyy-MM-dd HH:mm:ssZ",
-            "yyyy-MM-dd HH:mm:ss.SSSSSS"
-        ].map { format -> DateFormatter in
-            let formatter = DateFormatter()
-            formatter.dateFormat = format
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone(secondsFromGMT: 0)
-            return formatter
+        // First try robust ISO8601 parsing (supports Z, +00:00, fractional seconds)
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = iso.date(from: ts)
+        if date == nil {
+            let isoNoFraction = ISO8601DateFormatter()
+            isoNoFraction.formatOptions = [.withInternetDateTime]
+            date = isoNoFraction.date(from: ts)
         }
 
-        var date: Date?
-        for formatter in formatters {
-            if let d = formatter.date(from: timestampStr) {
-                date = d
-                break
+        // Fallbacks for common Postgres/PostgREST string shapes
+        if date == nil {
+            let patterns = [
+                "yyyy-MM-dd'T'HH:mm:ssXXXXX",            // timezone as +00:00
+                "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXXXX",     // fractional + timezone
+                "yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ",         // fractional + Z/+0000
+                "yyyy-MM-dd'T'HH:mm:ssZ",
+                "yyyy-MM-dd HH:mm:ssZ",
+                "yyyy-MM-dd HH:mm:ss.SSSSSS"
+            ]
+            for p in patterns {
+                let df = DateFormatter()
+                df.dateFormat = p
+                df.locale = Locale(identifier: "en_US_POSIX")
+                if let d = df.date(from: ts) { date = d; break }
             }
         }
 
-        guard let finalDate = date else {
-            return "-"
-        }
+        guard let final = date else { return "-" }
 
-        let displayFormatter = DateFormatter()
-        displayFormatter.dateStyle = .short
-        displayFormatter.timeStyle = .none // No time needed for this view
-        displayFormatter.locale = Locale(identifier: "he_IL")
-        
-        return displayFormatter.string(from: finalDate)
+        let display = DateFormatter()
+        display.dateStyle = .short
+        display.timeStyle = .none
+        display.locale = Locale(identifier: "he_IL")
+        return display.string(from: final)
     }
 }
 
@@ -1206,6 +1348,140 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Special Message UI
+
+struct SpecialMessageBanner: View {
+    let message: String
+    var onEdit: (() -> Void)? = nil
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "star.bubble.fill")
+                .foregroundColor(.yellow)
+                .font(.title2)
+                .padding(.top, 2)
+            
+            Text(message)
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            if let onEdit = onEdit {
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.yellow.opacity(0.15))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.yellow.opacity(0.4), lineWidth: 1)
+        )
+    }
+}
+
+struct SpecialMessageEditor: View {
+    @State var text: String
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
+    
+    init(initialText: String, onSave: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
+        self._text = State(initialValue: initialText)
+        self.onSave = onSave
+        self.onCancel = onCancel
+    }
+    
+    private var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 12) {
+                HStack {
+                    Spacer()
+                    Text("הודעה מיוחדת")
+                        .font(.headline)
+                }
+
+                RTLTextEditor(text: $text)
+                    .frame(minHeight: 180)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+            }
+            .padding(16)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // Place Save on the right (RTL leading) and Cancel on the left (RTL trailing)
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("שמור") { onSave(text) }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("ביטול") { onCancel() }
+                }
+            }
+            // Keep action buttons always above the keyboard
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Button("ביטול") { onCancel() }
+                        .buttonStyle(SecondaryButtonStyle())
+                    
+                    Spacer()
+                    
+                    if !isEmpty {
+                        Button("מחק הודעה") { onSave("") }
+                            .buttonStyle(DangerButtonStyle())
+                    }
+                    
+                    Button("שמור") { onSave(text) }
+                        .buttonStyle(PrimaryButtonStyle())
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+            }
+        }
+    }
+}
+
+// MARK: - RTL TextEditor helper
+private struct RTLTextEditor: UIViewRepresentable {
+    @Binding var text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.delegate = context.coordinator
+        tv.font = .preferredFont(forTextStyle: .body)
+        tv.backgroundColor = .clear
+        tv.isScrollEnabled = true
+        tv.textAlignment = .right
+        tv.semanticContentAttribute = .forceRightToLeft
+        return tv
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        if uiView.text != text { uiView.text = text }
+        // Ensure alignment stays right-to-left if system flips
+        uiView.textAlignment = .right
+        uiView.semanticContentAttribute = .forceRightToLeft
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: RTLTextEditor
+        init(_ parent: RTLTextEditor) { self.parent = parent }
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+        }
+    }
 }
 
 #Preview {

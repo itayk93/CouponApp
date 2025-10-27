@@ -158,6 +158,7 @@ struct WidgetCoupon: Codable, Identifiable {
     }
     
     var isFullyUsed: Bool {
+        if isOneTime { return false }
         return usedValue >= value
     }
     

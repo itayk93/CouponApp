@@ -12,6 +12,8 @@ struct Coupon: Codable, Identifiable, Equatable {
     let id: Int
     let code: String
     let description: String?
+    // A user-defined, prominent message to show on detail screen
+    var specialMessage: String?
     let value: Double
     let cost: Double
     let company: String
@@ -38,6 +40,7 @@ struct Coupon: Codable, Identifiable, Equatable {
     
     enum CodingKeys: String, CodingKey {
         case id, code, description, value, cost, company, expiration, source, status, purpose, cvv
+        case specialMessage = "special_message"
         case buyMeCouponUrl = "buyme_coupon_url"
         case straussCouponUrl = "strauss_coupon_url"
         case xgiftcardCouponUrl = "xgiftcard_coupon_url"
@@ -81,12 +84,14 @@ struct Coupon: Codable, Identifiable, Equatable {
         userId: Int,
         cvv: String?,
         cardExp: String?,
+        specialMessage: String? = nil,
         showInWidget: Bool? = nil,
         widgetDisplayOrder: Int? = nil
     ) {
         self.id = id
         self.code = code
         self.description = description
+        self.specialMessage = specialMessage
         self.value = value
         self.cost = cost
         self.company = company
@@ -119,6 +124,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         id = try container.decode(Int.self, forKey: .id)
         code = try container.decode(String.self, forKey: .code)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        specialMessage = try container.decodeIfPresent(String.self, forKey: .specialMessage)
         value = try container.decode(Double.self, forKey: .value)
         cost = try container.decode(Double.self, forKey: .cost)
         company = try container.decode(String.self, forKey: .company)
@@ -214,6 +220,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         try container.encode(id, forKey: .id)
         try container.encode(code, forKey: .code)
         try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(specialMessage, forKey: .specialMessage)
         try container.encode(value, forKey: .value)
         try container.encode(cost, forKey: .cost)
         try container.encode(company, forKey: .company)
@@ -263,6 +270,9 @@ struct Coupon: Codable, Identifiable, Equatable {
     }
     
     var isFullyUsed: Bool {
+        // One-time coupons are considered "used" by status change (e.g., "נוצל"),
+        // not by value consumption. Prevent false positives when value == 0.
+        if isOneTime { return false }
         return usedValue >= value
     }
     
@@ -282,6 +292,15 @@ struct Coupon: Codable, Identifiable, Equatable {
         guard let date = expirationDate else { return "ללא תפוגה" }
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
+        formatter.locale = Locale(identifier: "he_IL")
+        return formatter.string(from: date)
+    }
+
+    // dd/MM/yyyy format for compact display
+    var formattedExpirationDateShort: String {
+        guard let date = expirationDate else { return "ללא תפוגה" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM/yyyy"
         formatter.locale = Locale(identifier: "he_IL")
         return formatter.string(from: date)
     }
@@ -310,6 +329,15 @@ struct Coupon: Codable, Identifiable, Equatable {
         return EncryptionManager.decryptString(cvvValue)
         #else
         return cvv
+        #endif
+    }
+
+    var decryptedCardExp: String? {
+        #if !WIDGET_EXTENSION
+        guard let exp = cardExp else { return nil }
+        return EncryptionManager.decryptString(exp)
+        #else
+        return cardExp
         #endif
     }
 }
@@ -413,17 +441,20 @@ struct CouponCreateRequest: Codable {
     var straussCouponUrl: String?
     var xgiftcardCouponUrl: String?
     var xtraCouponUrl: String?
+    var cvv: String?
+    var cardExp: String?
     var isForSale: Bool
     var isOneTime: Bool
     var purpose: String?
     var autoDownloadDetails: String?
     
     enum CodingKeys: String, CodingKey {
-        case code, description, value, cost, company, expiration, source, purpose
+        case code, description, value, cost, company, expiration, source, purpose, cvv
         case buyMeCouponUrl = "buyme_coupon_url"
         case straussCouponUrl = "strauss_coupon_url"
         case xgiftcardCouponUrl = "xgiftcard_coupon_url"
         case xtraCouponUrl = "xtra_coupon_url"
+        case cardExp = "card_exp"
         case isForSale = "is_for_sale"
         case isOneTime = "is_one_time"
         case autoDownloadDetails = "auto_download_details"

@@ -15,6 +15,12 @@ struct UsageCouponSheet: View {
     @State private var usageDetails = ""
     @State private var selectedQuickAmount: Double? = nil
     @Environment(\.presentationMode) var presentationMode
+    @FocusState private var focusedField: Field?
+    
+    private enum Field {
+        case amount
+        case details
+    }
     
     private var quickAmounts: [Double] {
         let remaining = coupon.remainingValue
@@ -44,28 +50,44 @@ struct UsageCouponSheet: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
-                // Header
-                headerSection
-                
+            ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 24) {
+                        // Make header scrollable so inputs get space when keyboard shows
+                        headerSection
+                        
                         // Quick Amount Buttons
                         quickAmountSection
                         
                         // Manual Input
                         manualInputSection
+                            .id("amountSection")
                         
                         // Usage Details
                         detailsSection
+                            .id("detailsSection")
                         
                         Spacer(minLength: 100)
                     }
                     .padding()
                 }
-                
-                // Bottom Action
-                bottomActionSection
+                .scrollDismissesKeyboard(.interactively)
+                .onTapGesture { focusedField = nil }
+                .onChange(of: focusedField) { _, newVal in
+                    // Bring editing field into view
+                    withAnimation(.easeInOut) {
+                        if newVal == .amount {
+                            proxy.scrollTo("amountSection", anchor: .bottom)
+                        } else if newVal == .details {
+                            proxy.scrollTo("detailsSection", anchor: .bottom)
+                        }
+                    }
+                }
+                // Pin the action area above the keyboard/safe area
+                .safeAreaInset(edge: .bottom) {
+                    bottomActionSection
+                        .background(.ultraThinMaterial)
+                }
             }
             .navigationTitle("רישום שימוש")
             .navigationBarTitleDisplayMode(.inline)
@@ -149,6 +171,7 @@ struct UsageCouponSheet: View {
                 TextField("0", text: $usageAmount)
                     .keyboardType(.decimalPad)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .focused($focusedField, equals: .amount)
                     .onChange(of: usageAmount) { _, _ in
                         selectedQuickAmount = nil
                     }
@@ -180,6 +203,7 @@ struct UsageCouponSheet: View {
             
             TextField("לדוגמה: קניות בסופר, מסעדה, וכו'", text: $usageDetails, axis: .vertical)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                .focused($focusedField, equals: .details)
                 .lineLimit(3, reservesSpace: true)
         }
     }
@@ -229,6 +253,7 @@ struct UsageCouponSheet: View {
     // MARK: - Helper Functions
     private func recordUsage() {
         guard let amount = Double(usageAmount), isValidAmount else { return }
+        focusedField = nil
         onUsage(amount, usageDetails)
         presentationMode.wrappedValue.dismiss()
     }

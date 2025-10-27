@@ -31,14 +31,22 @@ struct CouponRowView: View {
                 // Coupon details
                 VStack(alignment: .leading, spacing: 6) {
                     // Company name and status
-                    HStack {
+                    HStack(spacing: 6) {
                         Text(coupon.company)
                             .font(.headline)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
-                        
+
+                        // Indicator that a special message exists (no content shown here)
+                        if let msg = coupon.specialMessage, !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Image(systemName: "star.fill")
+                                .foregroundColor(.orange)
+                                .font(.caption)
+                                .accessibilityLabel("יש הודעה חשובה")
+                        }
+
                         Spacer()
-                        
+
                         statusBadge
                     }
                     
