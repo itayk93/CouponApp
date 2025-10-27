@@ -37,6 +37,7 @@ Config.xcconfig
 *.bak
 *~
 .DS_Store
+build_output*.txt
 
 # API keys and secrets (additional protection)
 **/secrets.plist
