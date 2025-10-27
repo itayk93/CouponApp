@@ -1,5 +1,7 @@
 # Xcode
 .DS_Store
+# Build artifacts
+build/
 */build/*
 *.pbxuser
 !default.pbxuser
