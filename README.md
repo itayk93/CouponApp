@@ -8,11 +8,6 @@ This adds a "Quick Usage Report" screen that analyzes pasted text to suggest whi
 - ViewModels/QuickUsageViewModel.swift
 - Views/QuickUsageView.swift
 
-## Configure OpenAI API key
-Provide the key in one of the following:
-- Environment variable: OPENAI_API_KEY
-- Info.plist via xcconfig key `OPENAI_API_KEY` (Config.xcconfig -> Info.plist)
-
 ## Wiring into your app
 Instantiate QuickUsageView and provide two closures:
 - loadActiveCoupons: () -> [Coupon]
@@ -73,11 +68,6 @@ You'll need accounts and API keys for:
 - **Database Service**: For data storage and synchronization
 - **AI Service**: For intelligent text and image processing
 - **Cloud Functions**: For automated notifications (optional)
-
-See the example configuration file for the required format.
-
-### GitHub Secrets (for CI/CD)
-If using GitHub Actions, configure the required secrets for your services in your repository settings.
 
 ## 📱 Features Overview
 
