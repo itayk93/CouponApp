@@ -1,4 +1,4 @@
-# CouponManagerApp — Quick Usage with GPT-4o-mini
+# CouponManagerApp
 
 This adds a "Quick Usage Report" screen that analyzes pasted text to suggest which of your active coupons were used, using OpenAI gpt-4o-mini.
 
