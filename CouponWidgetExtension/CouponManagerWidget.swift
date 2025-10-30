@@ -1001,7 +1001,10 @@ private struct CouponLargeCardView: View {
 
                     // Expiry smaller and toned down
                     if let expDate = coupon.expirationDate {
-                        Text(isUrgent ? "פג תוקף היום" : "תוקף עד: \(DateFormatter.localizedString(from: expDate, dateStyle: .short, timeStyle: .none))")
+                        let df = DateFormatter()
+                        df.dateStyle = .short
+                        df.timeStyle = .none
+                        Text(isUrgent ? "פג תוקף היום" : "תוקף עד: \(df.string(from: expDate))")
                             .italic()
                             .couponFont(12, weight: .medium)
                             .foregroundColor(isUrgent ? .red : .secondary)
