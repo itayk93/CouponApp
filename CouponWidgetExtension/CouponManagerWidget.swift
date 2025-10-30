@@ -865,8 +865,10 @@ struct CouponManagerWidgetEntryView: View {
                     CouponCompaniesView(entry: entry)
                 }
             case .systemLarge:
-                // Large: blend with home screen (no gradient background)
-                CouponLargeView(entry: entry)
+                ZStack {
+                    WidgetStyle.primaryGradient.edgesIgnoringSafeArea(.all)
+                    CouponLargeView(entry: entry)
+                }
             default:
                 CouponStatsSmallView(entry: entry)
             }
@@ -879,17 +881,15 @@ struct CouponManagerWidgetEntryView: View {
 struct CouponLargeView: View {
     var entry: Provider.Entry
     
-    private var orderedCoupons: [WidgetCoupon] {
-        // Base order by user-defined display order
+    private var couponsToShow: [WidgetCoupon] {
         let sorted = entry.coupons.sorted { coupon1, coupon2 in
             let order1 = coupon1.widgetDisplayOrder ?? 999
             let order2 = coupon2.widgetDisplayOrder ?? 999
             return order1 < order2
         }
-        // Surface urgency: move a coupon expiring today to the front if exists
-        if let urgent = sorted.first(where: { $0.isExpiringToday }) {
-            var rest = sorted.filter { $0.id != urgent.id }
-            return [urgent] + rest
+        print("🎯 LARGE WIDGET: Displaying \(sorted.count) coupons in order:")
+        for (index, coupon) in sorted.enumerated() {
+            print("   \(index+1). \(coupon.company) (Order: \(coupon.widgetDisplayOrder ?? 999))")
         }
         return sorted
     }
@@ -911,31 +911,68 @@ struct CouponLargeView: View {
     private var totalActiveBalance: Double { entry.totalRemainingValue }
     
     var body: some View {
-        VStack(spacing: 8) {
-            // Header row: center-aligned quick stats
+        VStack(spacing: 4) {
+            // שורה אחת עם הלוגו בצד שמאל והמידע במרכז
             HStack(spacing: 12) {
-                Spacer(minLength: 0)
+                // הלוגו בצד שמאל
+                if let uiImage = UIImage(named: "CouponLogo", in: Bundle.main, compatibleWith: nil) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 32, height: 32)
+                        .cornerRadius(8)
+                } else {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color(red: 0.2, green: 0.6, blue: 1.0),
+                                        Color(red: 0.1, green: 0.5, blue: 0.9)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                        
+                        VStack(spacing: 1) {
+                            Text("%")
+                                .couponFont(14, weight: .heavy)
+                                .foregroundColor(.white)
+                            
+                            Text("✂")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                }
+                
+                // הטקסט במרכז
                 VStack(alignment: .center, spacing: 2) {
                     Text("קופונים פעילים: \(totalActiveCoupons)")
                         .couponFont(14, weight: .semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
+                    
                     Text("יתרה: ₪\(Int(totalActiveBalance))")
-                        .couponFont(13, weight: .medium)
-                        .foregroundColor(.secondary)
+                        .couponFont(14, weight: .medium)
+                        .foregroundColor(.white)
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity)
+                
+                Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.top, 10)
             
             Rectangle()
-                .fill(Color.primary.opacity(0.06))
+                .fill(Color.primary.opacity(0.08))
                 .frame(height: 1)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 8)
                 .padding(.bottom, 8)
 
             VStack(spacing: 10) {
-                if orderedCoupons.isEmpty {
+                if couponsToShow.isEmpty {
                     VStack {
                         Image(systemName: "square.and.arrow.down.on.square")
                             .couponFont(18)
@@ -946,11 +983,10 @@ struct CouponLargeView: View {
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ForEach(Array(orderedCoupons.enumerated()), id: \.element.id) { index, coupon in
+                    ForEach(couponsToShow) { coupon in
                         CouponLargeCardView(
                             coupon: coupon,
-                            logoPath: getCompanyLogo(for: coupon.company),
-                            isUrgent: index == 0 && coupon.isExpiringToday
+                            logoPath: getCompanyLogo(for: coupon.company)
                         )
                     }
                 }
@@ -967,7 +1003,6 @@ struct CouponLargeView: View {
 private struct CouponLargeCardView: View {
     let coupon: WidgetCoupon
     let logoPath: String
-    let isUrgent: Bool
     
     private var couponURL: URL? {
         URL(string: "couponmaster://coupon/\(coupon.id)")
@@ -985,61 +1020,53 @@ private struct CouponLargeCardView: View {
     var body: some View {
         Link(destination: couponURL ?? URL(string: "couponmaster://")!) {
             HStack(spacing: 12) {
-                CompanyLogoView(company: coupon.company, logoPath: logoPath, size: 44)
+                CompanyLogoView(company: coupon.company, logoPath: logoPath, size: 40)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    // Discount bold, store normal
-                    HStack(spacing: 6) {
-                        Text("₪\(Int(coupon.isOneTime ? coupon.value : coupon.remainingValue))")
-                            .couponFont(18, weight: .bold)
-                            .foregroundColor(isUrgent ? Color.red : .primary)
-                        Text(coupon.company)
-                            .couponFont(14, weight: .regular)
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                    }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(coupon.company)
+                        .couponFont(13, weight: .semibold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
 
-                    // Expiry smaller and toned down
-                    if let expDate = coupon.expirationDate {
-                        let df = DateFormatter()
-                        df.dateStyle = .short
-                        df.timeStyle = .none
-                        Text(isUrgent ? "פג תוקף היום" : "תוקף עד: \(df.string(from: expDate))")
-                            .italic()
-                            .couponFont(12, weight: .medium)
-                            .foregroundColor(isUrgent ? .red : .secondary)
-                    }
+                    Text("יתרה: \(Int(coupon.remainingValue))₪")
+                        .couponFont(10, weight: .semibold)
+                        .foregroundColor(.white)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Chevron for affordance
-                Image(systemName: layoutDirection == .rightToLeft ? "chevron.right" : "chevron.left")
-                    .couponFont(14)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                ZStack(alignment: .leading) {
-                    // Card background that subtly blends with widget background
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.primary.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(formatCouponCode(decryptedCode))
+                        .couponFont(9, weight: .bold)
+                        .foregroundColor(.blue)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.6)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 15)
+                                .fill(Color.blue.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 15)
+                                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                                )
                         )
-                    // Urgent accent bar for the first item if expiring today
-                    if isUrgent {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient(
-                                gradient: Gradient(colors: [Color.red, Color.orange]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ))
-                            .frame(width: 4)
-                            .padding(.vertical, 6)
-                    }
                 }
+
+                Image(systemName: layoutDirection == .rightToLeft ? "chevron.right" : "chevron.left")
+                    .couponFont(12)
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.primary.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                    )
             )
         }
     }
