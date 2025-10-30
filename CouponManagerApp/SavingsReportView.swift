@@ -715,9 +715,9 @@ struct SavingsReportView: View {
         logSavingsDebug(context: context)
         // Cancel any pending recompute to debounce rapid changes
         recomputeWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak _ = self] in
-            precomputeAll()
-            rebuildTooltipCaches()
+        let work = DispatchWorkItem { [weak self] in
+            self?.precomputeAll()
+            self?.rebuildTooltipCaches()
         }
         recomputeWorkItem = work
         // Small delay smooths UI when user changes multiple controls quickly
