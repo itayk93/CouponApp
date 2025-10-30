@@ -706,11 +706,12 @@ private func formatCouponCode(_ code: String) -> String {
     return formattedCode
 }
 
-// MARK: - CompanyLogoView - גרסה מתוקנת שמשתמשת רק ב-AsyncImage
+// MARK: - CompanyLogoView - parametric size
 
 private struct CompanyLogoView: View {
     let company: String
     let logoPath: String
+    var size: CGFloat = 60
     
     private var companyImageURL: URL? {
         let trimmed = logoPath.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -728,32 +729,22 @@ private struct CompanyLogoView: View {
     }
     
     var body: some View {
-        Group {
+        ZStack {
             if let url = companyImageURL,
                let imageData = try? Data(contentsOf: url),
                let uiImage = UIImage(data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 60, height: 60)
-                    .clipShape(Circle())
+                    .scaledToFill()
             } else {
-                fallbackLogo
+                Circle().fill(Color.blue.opacity(0.1))
+                Text(String(company.prefix(2).uppercased()))
+                    .couponFont(18, weight: .bold)
+                    .foregroundColor(.blue)
             }
         }
-        .frame(width: 60, height: 60)
-    }
-    
-    private var fallbackLogo: some View {
-        ZStack {
-            Circle()
-                .fill(Color.blue.opacity(0.1))
-                .frame(width: 60, height: 60)
-            
-            Text(String(company.prefix(2).uppercased()))
-                .couponFont(18, weight: .bold)
-                .foregroundColor(.blue)
-        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }
 // MARK: - Medium Coupon Card View
@@ -778,8 +769,7 @@ struct CouponMediumCardView: View {
     var body: some View {
         Link(destination: couponURL ?? URL(string: "couponmaster://")!) {
             HStack(spacing: 12) {
-                CompanyLogoView(company: coupon.company, logoPath: logoPath)
-                    .frame(width: 48, height: 48)
+                CompanyLogoView(company: coupon.company, logoPath: logoPath, size: 48)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(coupon.company)
@@ -973,7 +963,7 @@ struct CouponLargeView: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.top, 10)
             
             Rectangle()
                 .fill(Color.primary.opacity(0.08))
@@ -981,7 +971,7 @@ struct CouponLargeView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 if couponsToShow.isEmpty {
                     VStack {
                         Image(systemName: "square.and.arrow.down.on.square")
@@ -1029,34 +1019,31 @@ private struct CouponLargeCardView: View {
     
     var body: some View {
         Link(destination: couponURL ?? URL(string: "couponmaster://")!) {
-            HStack(spacing: 16) {
-                CompanyLogoView(company: coupon.company, logoPath: logoPath)
-                    .frame(width: 40, height: 40)
-                
+            HStack(spacing: 12) {
+                CompanyLogoView(company: coupon.company, logoPath: logoPath, size: 40)
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text(coupon.company)
-                        .couponFont(14, weight: .bold)
+                        .couponFont(13, weight: .semibold)
                         .foregroundColor(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
 
                     Text("יתרה: \(Int(coupon.remainingValue))₪")
-                        .couponFont(11, weight: .semibold)
+                        .couponFont(10, weight: .semibold)
                         .foregroundColor(.white)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(formatCouponCode(decryptedCode))
-                        .couponFont(11, weight: .bold)
+                        .couponFont(9, weight: .bold)
                         .foregroundColor(.blue)
-                        .lineLimit(3)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.6)
                         .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 4)
+                        .lineSpacing(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 15)
                                 .fill(Color.blue.opacity(0.1))
@@ -1066,14 +1053,13 @@ private struct CouponLargeCardView: View {
                                 )
                         )
                 }
-                .frame(width: 140, alignment: .trailing)
-                
-                Image(systemName: "chevron.left")
+
+                Image(systemName: layoutDirection == .rightToLeft ? "chevron.right" : "chevron.left")
                     .couponFont(12)
                     .foregroundColor(.gray)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.primary.opacity(0.05))

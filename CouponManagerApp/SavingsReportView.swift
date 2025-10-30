@@ -51,6 +51,23 @@ struct SavingsReportView: View {
     @State private var categoryTooltipCache: [String: (value: Double, percent: Double)] = [:]
     @State private var companyTooltipCache: [String: (value: Double, percent: Double, active: Int, used: Int, total: Int)] = [:]
 
+    // Debounce recomputations when multiple controls change quickly
+    @State private var recomputeWorkItem: DispatchWorkItem? = nil
+
+    // Cached formatters to avoid per-render allocations
+    private static let yearFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "he_IL")
+        df.dateFormat = "yyyy"
+        return df
+    }()
+    private static let expirationFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.dateFormat = "yyyy-MM-dd"
+        return df
+    }()
+
     // Right‑to‑left axis helpers using numeric mirroring
     private func rtlX(_ date: Date) -> Double {
         // Mirror around 0 so newer dates have smaller (more negative) values on the axis
@@ -68,10 +85,7 @@ struct SavingsReportView: View {
     }
     private var yearlyRTLTicks: [Double] { yearRange.map { rtlX($0) } }
     private func yearText(_ date: Date) -> String {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "he_IL")
-        df.dateFormat = "yyyy"
-        return df.string(from: date)
+        SavingsReportView.yearFormatter.string(from: date)
     }
     
     // Computed properties for statistics
@@ -206,10 +220,7 @@ struct SavingsReportView: View {
         return coupons.filter { c in
             guard c.status == "פעיל", let expStr = c.expiration else { return false }
             // expiration stored as YYYY-MM-DD
-            let df = DateFormatter()
-            df.dateFormat = "yyyy-MM-dd"
-            df.locale = Locale(identifier: "en_US_POSIX")
-            guard let exp = df.date(from: expStr) else { return false }
+            guard let exp = SavingsReportView.expirationFormatter.date(from: expStr) else { return false }
             let m = cal.component(.month, from: exp)
             let y = cal.component(.year, from: exp)
             return m == targetMonth && y == targetYear && (c.value - c.usedValue) > 0
@@ -627,47 +638,29 @@ struct SavingsReportView: View {
                 .presentationDetents([.medium])
             }
             .onAppear {
-                logSavingsDebug(context: "onAppear")
-                precomputeAll()
-                // Rebuild tooltip caches once data is available
-                DispatchQueue.main.async { rebuildTooltipCaches() }
+                scheduleRecompute(context: "onAppear")
             }
             // Log and recompute when timeframe changes
-            .onChange(of: selectedTimeframe) { _, _ in
-                logSavingsDebug(context: "timeframeChanged")
-                precomputeAll()
-                rebuildTooltipCaches()
-            }
-            .onChange(of: selectedMonth) { _, _ in
-                logSavingsDebug(context: "monthChanged")
-                precomputeAll()
-                rebuildTooltipCaches()
-            }
-            .onChange(of: selectedYear) { _, _ in
-                logSavingsDebug(context: "yearChanged")
-                precomputeAll()
-                rebuildTooltipCaches()
-            }
-            .onChange(of: customStartDate) { _, _ in
-                if selectedTimeframe == .customRange { precomputeAll(); rebuildTooltipCaches() }
-            }
-            .onChange(of: customEndDate) { _, _ in
-                if selectedTimeframe == .customRange { precomputeAll(); rebuildTooltipCaches() }
-            }
+            .onChange(of: selectedTimeframe) { _, _ in scheduleRecompute(context: "timeframeChanged") }
+            .onChange(of: selectedMonth) { _, _ in scheduleRecompute(context: "monthChanged") }
+            .onChange(of: selectedYear) { _, _ in scheduleRecompute(context: "yearChanged") }
+            .onChange(of: customStartDate) { _, _ in if selectedTimeframe == .customRange { scheduleRecompute(context: "customStartChanged") } }
+            .onChange(of: customEndDate) { _, _ in if selectedTimeframe == .customRange { scheduleRecompute(context: "customEndChanged") } }
         }
     }
 
     // MARK: - Debug Logging
     private func logBoth(_ message: String) {
+        // Route through AppLogger only; avoids console spam unless explicitly enabled.
         AppLogger.log(message)
-        print(message)
     }
     private func fmt2(_ value: Double) -> String {
         String(format: "%.2f", value)
     }
 
     private func logSavingsDebug(context: String) {
-        // Print current timeframe selection
+        // Print current timeframe selection (only if logging enabled)
+        guard AppLogger.isEnabled else { return }
         let tf: String = {
             switch selectedTimeframe {
             case .allTime: return "allTime"
@@ -715,6 +708,20 @@ struct SavingsReportView: View {
         // Note: The base data is fetched via Supabase REST from the `coupon` table.
         // The request URL (no pagination) is logged in CouponAPIClient.fetchAllUserCoupons.
         logBoth("🔎 [SavingsDebug] source=Supabase table 'coupon' → all user coupons; client applies timeframe filter above.")
+    }
+
+    // Debounced recomputation entry point
+    private func scheduleRecompute(context: String) {
+        logSavingsDebug(context: context)
+        // Cancel any pending recompute to debounce rapid changes
+        recomputeWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak _ = self] in
+            precomputeAll()
+            rebuildTooltipCaches()
+        }
+        recomputeWorkItem = work
+        // Small delay smooths UI when user changes multiple controls quickly
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
     }
 
     // MARK: - Timeframe Selector
