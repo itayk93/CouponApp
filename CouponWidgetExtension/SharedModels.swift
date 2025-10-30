@@ -166,6 +166,12 @@ struct WidgetCoupon: Codable, Identifiable {
         guard let expirationString = expiration else { return nil }
         return ISO8601DateFormatter().date(from: expirationString + "T00:00:00Z")
     }
+
+    var isExpiringToday: Bool {
+        guard let exp = expirationDate else { return false }
+        let cal = Calendar.current
+        return cal.isDateInToday(exp)
+    }
 }
 
 struct WidgetCompany: Codable, Identifiable {
