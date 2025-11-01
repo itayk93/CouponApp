@@ -715,7 +715,7 @@ struct SavingsReportView: View {
         logSavingsDebug(context: context)
         // Cancel any pending recompute to debounce rapid changes
         recomputeWorkItem?.cancel()
-        let work = DispatchWorkItem { [weak _ = self] in
+        let work = DispatchWorkItem {
             precomputeAll()
             rebuildTooltipCaches()
         }
