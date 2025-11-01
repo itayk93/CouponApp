@@ -1013,25 +1013,67 @@ struct CompanyCouponsView: View {
     let onUpdate: () -> Void
     
     @StateObject private var couponAPI = CouponAPIClient()
+    @State private var sortMode: CompanySortMode = .expiration
+    @State private var showOrderingView: Bool = false
+
+    enum CompanySortMode: String, CaseIterable {
+        case expiration
+        case remainingValue
+        case value
+        case dateAdded
+        case manual
+
+        var displayName: String {
+            switch self {
+            case .expiration: return "תוקף (קרוב קודם)"
+            case .remainingValue: return "ערך נותר (גבוה קודם)"
+            case .value: return "ערך (גבוה קודם)"
+            case .dateAdded: return "תאריך הוספה (חדש קודם)"
+            case .manual: return "לפי סדר ידני"
+            }
+        }
+    }
     
     // Computed property for sorted coupons
     private var sortedCoupons: [Coupon] {
         let filteredCoupons = coupons.filter { !$0.isForSale }
-        
-        return filteredCoupons.sorted { coupon1, coupon2 in
-            // Primary sort: by expiration date (closest first)
-            if let exp1 = coupon1.expirationDate, let exp2 = coupon2.expirationDate {
-                if exp1 != exp2 {
-                    return exp1 < exp2
-                }
-            } else if coupon1.expirationDate != nil {
-                return true // coupon1 has expiration, coupon2 doesn't - prioritize coupon1
-            } else if coupon2.expirationDate != nil {
-                return false // coupon2 has expiration, coupon1 doesn't - prioritize coupon2
+
+        switch sortMode {
+        case .manual:
+            // Sort by company_display_order (nulls last), then fallback by expiration, then remaining value
+            return filteredCoupons.sorted { a, b in
+                let aOrder = a.companyDisplayOrder ?? Int.max
+                let bOrder = b.companyDisplayOrder ?? Int.max
+                if aOrder != bOrder { return aOrder < bOrder }
+                // fallback if equal or nil
+                if let exp1 = a.expirationDate, let exp2 = b.expirationDate, exp1 != exp2 { return exp1 < exp2 }
+                return a.remainingValue > b.remainingValue
             }
-            
-            // Secondary sort: by remaining amount (highest first)
-            return coupon1.remainingValue > coupon2.remainingValue
+        case .remainingValue:
+            return filteredCoupons.sorted { lhs, rhs in
+                if lhs.remainingValue != rhs.remainingValue { return lhs.remainingValue > rhs.remainingValue }
+                return (lhs.expirationDate ?? .distantFuture) < (rhs.expirationDate ?? .distantFuture)
+            }
+        case .value:
+            return filteredCoupons.sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return (lhs.expirationDate ?? .distantFuture) < (rhs.expirationDate ?? .distantFuture)
+            }
+        case .dateAdded:
+            return filteredCoupons.sorted { lhs, rhs in
+                return lhs.dateAdded > rhs.dateAdded
+            }
+        case .expiration:
+            return filteredCoupons.sorted { coupon1, coupon2 in
+                if let exp1 = coupon1.expirationDate, let exp2 = coupon2.expirationDate {
+                    if exp1 != exp2 { return exp1 < exp2 }
+                } else if coupon1.expirationDate != nil {
+                    return true
+                } else if coupon2.expirationDate != nil {
+                    return false
+                }
+                return coupon1.remainingValue > coupon2.remainingValue
+            }
         }
     }
     
@@ -1063,6 +1105,23 @@ struct CompanyCouponsView: View {
         .navigationTitle(companyName)
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.layoutDirection, .rightToLeft) // force RTL for this screen
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    // Sort options
+                    Button(action: { sortMode = .expiration }) { Label(CompanySortMode.expiration.displayName, systemImage: "calendar") }
+                    Button(action: { sortMode = .remainingValue }) { Label(CompanySortMode.remainingValue.displayName, systemImage: "banknote") }
+                    Button(action: { sortMode = .value }) { Label(CompanySortMode.value.displayName, systemImage: "dollarsign.circle") }
+                    // Use a widely supported symbol to avoid SF Symbols errors on older OS versions
+                    Button(action: { sortMode = .dateAdded }) { Label(CompanySortMode.dateAdded.displayName, systemImage: "calendar.badge.plus") }
+                    Divider()
+                    Button(action: { sortMode = .manual }) { Label(CompanySortMode.manual.displayName, systemImage: "list.number") }
+                    Button("סידור ידני…", action: { showOrderingView = true })
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down.circle")
+                }
+            }
+        }
         .onAppear {
             // Update last_company_view timestamp for all coupons of this company
             couponAPI.updateLastCompanyView(for: companyName, userId: user.id) { result in
@@ -1073,7 +1132,47 @@ struct CompanyCouponsView: View {
                     print("❌ Failed to update last_company_view for \(companyName): \(error)")
                 }
             }
+            // Load saved sort preference for this company
+            loadSavedSortPreference()
         }
+        .onChange(of: sortMode) {
+            saveSortPreference()
+        }
+        .sheet(isPresented: $showOrderingView) {
+            CompanyCouponsOrderingView(
+                companyName: companyName,
+                user: user,
+                coupons: coupons.filter { !$0.isForSale },
+                companies: companies,
+                onDone: {
+                    showOrderingView = false
+                    // After manual ordering, default to manual sort for this company and persist
+                    sortMode = .manual
+                    saveSortPreference()
+                    onUpdate()
+                }
+            )
+        }
+    }
+}
+
+// MARK: - Sort preference persistence (per company)
+extension CompanyCouponsView {
+    private func preferenceKey() -> String {
+        return "CompanySortMode_\(companyName.lowercased())"
+    }
+
+    private func loadSavedSortPreference() {
+        let key = preferenceKey()
+        if let raw = UserDefaults.standard.string(forKey: key),
+           let mode = CompanySortMode(rawValue: raw) {
+            sortMode = mode
+        }
+    }
+
+    private func saveSortPreference() {
+        let key = preferenceKey()
+        UserDefaults.standard.set(sortMode.rawValue, forKey: key)
     }
 }
 

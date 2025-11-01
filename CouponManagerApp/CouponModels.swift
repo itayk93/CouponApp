@@ -37,6 +37,8 @@ struct Coupon: Codable, Identifiable, Equatable {
     let cardExp: String?
     var showInWidget: Bool?
     var widgetDisplayOrder: Int?
+    // Per-company manual ordering (for the company screen)
+    var companyDisplayOrder: Int?
     
     enum CodingKeys: String, CodingKey {
         case id, code, description, value, cost, company, expiration, source, status, purpose, cvv
@@ -56,6 +58,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         case cardExp = "card_exp"
         case showInWidget = "show_in_widget"
         case widgetDisplayOrder = "widget_display_order"
+        case companyDisplayOrder = "company_display_order"
     }
     
     // Memberwise initializer
@@ -86,7 +89,8 @@ struct Coupon: Codable, Identifiable, Equatable {
         cardExp: String?,
         specialMessage: String? = nil,
         showInWidget: Bool? = nil,
-        widgetDisplayOrder: Int? = nil
+        widgetDisplayOrder: Int? = nil,
+        companyDisplayOrder: Int? = nil
     ) {
         self.id = id
         self.code = code
@@ -115,6 +119,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         self.cardExp = cardExp
         self.showInWidget = showInWidget
         self.widgetDisplayOrder = widgetDisplayOrder
+        self.companyDisplayOrder = companyDisplayOrder
     }
     
     // Custom decoder to handle usedValue as both String and Double
@@ -211,6 +216,8 @@ struct Coupon: Codable, Identifiable, Equatable {
         
         // Handle widget_display_order
         widgetDisplayOrder = try container.decodeIfPresent(Int.self, forKey: .widgetDisplayOrder)
+        // Handle company_display_order
+        companyDisplayOrder = try container.decodeIfPresent(Int.self, forKey: .companyDisplayOrder)
     }
     
     // Custom encoder
@@ -244,6 +251,7 @@ struct Coupon: Codable, Identifiable, Equatable {
         try container.encodeIfPresent(cardExp, forKey: .cardExp)
         try container.encodeIfPresent(showInWidget, forKey: .showInWidget)
         try container.encodeIfPresent(widgetDisplayOrder, forKey: .widgetDisplayOrder)
+        try container.encodeIfPresent(companyDisplayOrder, forKey: .companyDisplayOrder)
     }
     
     // Equatable conformance
