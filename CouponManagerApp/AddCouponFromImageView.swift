@@ -14,6 +14,7 @@ import UIKit
 struct AddCouponFromImageView: View {
     let user: User
     let companies: [Company]
+    let initialImage: UIImage?
     let onCouponAdded: () -> Void
     
     @State private var selectedImage: UIImage?
@@ -36,6 +37,15 @@ struct AddCouponFromImageView: View {
     
     private let openAIClient = OpenAIClient(apiKey: Config.openAIAPIKey)
     
+    init(user: User, companies: [Company], initialImage: UIImage? = nil, onCouponAdded: @escaping () -> Void) {
+        self.user = user
+        self.companies = companies
+        self.initialImage = initialImage
+        self.onCouponAdded = onCouponAdded
+        // Pre-seed selection directly to avoid double onAppear in some sheet flows
+        _selectedImage = State(initialValue: initialImage)
+    }
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -101,6 +111,12 @@ struct AddCouponFromImageView: View {
                 },
                 prefilledData: analysisResult
             )
+        }
+        .onAppear {
+            // Pre-seed image when arriving from a share extension deep link
+            if selectedImage == nil, let img = initialImage {
+                selectedImage = img
+            }
         }
     }
     

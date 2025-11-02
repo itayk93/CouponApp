@@ -348,6 +348,22 @@ struct Coupon: Codable, Identifiable, Equatable {
         return cardExp
         #endif
     }
+
+    // Decrypted URLs
+    var decryptedBuyMeUrl: String? {
+        guard let url = buyMeCouponUrl, !url.isEmpty else { return nil }
+        return EncryptionManager.decryptString(url) ?? url
+    }
+
+    var decryptedStraussUrl: String? {
+        guard let url = straussCouponUrl, !url.isEmpty else { return nil }
+        return EncryptionManager.decryptString(url) ?? url
+    }
+
+    var decryptedXtraUrl: String? {
+        guard let url = xtraCouponUrl, !url.isEmpty else { return nil }
+        return EncryptionManager.decryptString(url) ?? url
+    }
 }
 
 // MARK: - Company Model

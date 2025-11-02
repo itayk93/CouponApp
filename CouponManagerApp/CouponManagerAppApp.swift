@@ -84,6 +84,22 @@ struct CouponManagerAppApp: App {
                 NotificationCenter.default.post(name: NSNotification.Name("NavigateToCouponDetail"), object: nil, userInfo: ["couponId": couponId])
                 return
             }
+
+            // Import image from share extension: couponmanager://import-image?file=<name>
+            if url.host == "import-image" {
+                if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                   let fileName = components.queryItems?.first(where: { $0.name == "file" })?.value {
+                    // Post a notification with the incoming file name. The main list view
+                    // will open the Add-from-Image flow, load the image from the shared
+                    // container, and trigger analysis as usual.
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("NavigateToAddFromImage"),
+                        object: nil,
+                        userInfo: ["fileName": fileName]
+                    )
+                    return
+                }
+            }
         }
     }
 }

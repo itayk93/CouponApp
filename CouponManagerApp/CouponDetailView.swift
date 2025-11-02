@@ -538,15 +538,15 @@ struct CouponDetailView: View {
             }
             
             // External links
-            if let buymeUrl = coupon.buyMeCouponUrl, !buymeUrl.isEmpty {
+            if let buymeUrl = coupon.decryptedBuyMeUrl, !buymeUrl.isEmpty {
                 ExternalLinkBox(icon: "link", title: "קישור BuyMe:", url: buymeUrl, buttonText: "עבור ל-BuyMe")
             }
             
-            if let xtraUrl = coupon.xtraCouponUrl, !xtraUrl.isEmpty {
+            if let xtraUrl = coupon.decryptedXtraUrl, !xtraUrl.isEmpty {
                 ExternalLinkBox(icon: "link", title: "קישור Xtra:", url: xtraUrl, buttonText: "עבור ל-Xtra")
             }
             
-            if let straussUrl = coupon.straussCouponUrl, !straussUrl.isEmpty {
+            if let straussUrl = coupon.decryptedStraussUrl, !straussUrl.isEmpty {
                 ExternalLinkBox(icon: "link", title: "קישור שטראוס פלוס:", url: straussUrl, buttonText: "עבור לשטראוס פלוס")
             }
             
@@ -854,7 +854,15 @@ struct CouponDetailView: View {
     }
     
     private func checkLimitAndUpdate(show: Bool) {
-        let currentWidgetCouponsCount = allCoupons.filter { $0.showInWidget == true && $0.id != coupon.id }.count
+        // Count only coupons that are eligible to appear in the widget:
+        // active, not expired, and not fully used (unless one-time).
+        let currentWidgetCouponsCount = allCoupons.filter { c in
+            (c.showInWidget == true) &&
+            (c.id != coupon.id) &&
+            (c.status == "פעיל") &&
+            (!c.isExpired) &&
+            (!c.isFullyUsed || c.isOneTime)
+        }.count
         
         print("🔍 Current widget coupons count: \(currentWidgetCouponsCount)")
         
@@ -927,6 +935,14 @@ struct CouponDetailView: View {
         couponAPI.markCouponAsUsed(couponId: coupon.id) { result in
             switch result {
             case .success:
+                // If this coupon was selected for the widget, clear it
+                if (self.coupon.showInWidget ?? false) {
+                    let update: [String: Any] = ["show_in_widget": false, "widget_display_order": NSNull()]
+                    self.couponAPI.updateCoupon(couponId: self.coupon.id, data: update) { _ in
+                        // Best-effort; ignore errors for UX
+                        AppGroupManager.shared.refreshWidgetTimelines()
+                    }
+                }
                 onUpdate()
                 presentationMode.wrappedValue.dismiss()
             case .failure(let error):
@@ -1144,11 +1160,14 @@ struct InfoBoxWithProgress: View {
 }
 
 // MARK: - External Link Box
+import SafariServices
+
 struct ExternalLinkBox: View {
     let icon: String
     let title: String
     let url: String
     let buttonText: String
+    @State private var safariURL: IdentifiableURL? = nil
     
     var body: some View {
         HStack(spacing: 12) {
@@ -1165,8 +1184,11 @@ struct ExternalLinkBox: View {
             Spacer()
             
             Button(buttonText) {
-                if let url = URL(string: url) {
-                    UIApplication.shared.open(url)
+                if let u = sanitizeURL(url) {
+                    // Try system open first; if it declines, show in SafariView
+                    UIApplication.shared.open(u, options: [:]) { success in
+                        if !success { safariURL = IdentifiableURL(url: u) }
+                    }
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
@@ -1175,7 +1197,35 @@ struct ExternalLinkBox: View {
         .padding(12)
         .background(Color(.secondarySystemBackground))
         .cornerRadius(8)
+        .sheet(item: $safariURL) { u in
+            SafariView(url: u.url)
+        }
     }
+    
+    private func sanitizeURL(_ original: String) -> URL? {
+        let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        var candidate = trimmed
+        if !(candidate.lowercased().hasPrefix("http://") || candidate.lowercased().hasPrefix("https://")) {
+            candidate = "https://" + candidate
+        }
+        return URL(string: candidate) ?? URL(string: candidate.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? candidate)
+    }
+}
+
+// MARK: - SafariView Wrapper
+struct SafariView: UIViewControllerRepresentable, Identifiable {
+    let id = UUID()
+    let url: URL
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
+struct IdentifiableURL: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 // MARK: - Transaction Row View

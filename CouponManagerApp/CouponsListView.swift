@@ -24,6 +24,7 @@ struct CouponsListView: View {
     @State private var showingAddCoupon = false
     @State private var showingQuickAddSheet = false
     @State private var showingImageAnalysis = false
+    @State private var incomingSharedImage: UIImage? = nil
     @State private var errorMessage = ""
     @State private var showingFilterSheet = false
     // Pagination variables removed - all coupons loaded at once
@@ -154,10 +155,13 @@ struct CouponsListView: View {
                     }
                 )
             }
-            .sheet(isPresented: $showingImageAnalysis) {
+            .sheet(isPresented: $showingImageAnalysis, onDismiss: {
+                incomingSharedImage = nil
+            }) {
                 AddCouponFromImageView(
                     user: user,
                     companies: companies,
+                    initialImage: incomingSharedImage,
                     onCouponAdded: {
                         print("🔄 Image coupon added, refreshing list...")
                         DispatchQueue.main.async {
@@ -234,6 +238,16 @@ struct CouponsListView: View {
                 if let couponId = notification.userInfo?["couponId"] as? Int,
                    let coupon = coupons.first(where: { $0.id == couponId }) {
                     selectedCouponForDetail = coupon
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToAddFromImage"))) { notification in
+                // Expecting a file name stored in the shared app group container
+                guard let fileName = notification.userInfo?["fileName"] as? String else { return }
+                if let image = SharedImageInbox.loadImage(named: fileName) {
+                    incomingSharedImage = image
+                    showingImageAnalysis = true
+                    // Clean the file after loading to avoid growth
+                    SharedImageInbox.removeImage(named: fileName)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToCompany"))) { notification in
