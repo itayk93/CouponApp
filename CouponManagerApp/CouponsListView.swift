@@ -36,6 +36,7 @@ struct CouponsListView: View {
     @State private var showingProfile = false
     @State private var selectedCouponForDetail: Coupon? = nil
     @State private var viewId = UUID()
+    @State private var lastSelectedCouponIdForRestore: Int? = nil
     @State private var expiringCoupons: [Coupon] = []
     @State private var selectedCompanyFromWidget: String? = nil
     
@@ -208,6 +209,8 @@ struct CouponsListView: View {
             }
     }
     
+    @Environment(\.scenePhase) private var scenePhase
+
     private var withEventHandlers: some View {
         withSheetPresentations
             .id(viewId)
@@ -219,6 +222,26 @@ struct CouponsListView: View {
                 
                 // Ensure user data is saved to shared container every time the app appears
                 AppGroupManager.shared.saveCurrentUserToSharedContainer(user)
+            }
+            .onChange(of: scenePhase) { phase in
+                switch phase {
+                case .background, .inactive:
+                    // If a coupon detail is open and the app goes to background,
+                    // remember which coupon was open so we can restore it when returning.
+                    if let c = selectedCouponForDetail {
+                        lastSelectedCouponIdForRestore = c.id
+                    }
+                case .active:
+                    if let restoreId = lastSelectedCouponIdForRestore, selectedCouponForDetail == nil {
+                        if let coupon = coupons.first(where: { $0.id == restoreId }) {
+                            // Restore detail sheet
+                            selectedCouponForDetail = coupon
+                        }
+                        lastSelectedCouponIdForRestore = nil
+                    }
+                @unknown default:
+                    break
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToHome"))) { _ in
                 // Dismiss any open sheets
