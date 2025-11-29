@@ -20,6 +20,16 @@ final class MonthlySummaryViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         
+        // Try demo/cached first for quick display
+        if !forceRefresh {
+            MonthlySummaryCache.shared.seedDemoIfNeeded()
+            if let cached = MonthlySummaryCache.shared.cachedSummary(month: month, year: year) {
+                summary = cached
+                isLoading = false
+                return
+            }
+        }
+        
         do {
             let result = try await service.fetchSummary(
                 month: month,
@@ -31,7 +41,13 @@ final class MonthlySummaryViewModel: ObservableObject {
             summary = result
             await acknowledgeIfNeeded(result.id)
         } catch {
-            errorMessage = error.localizedDescription
+            // On failure, try demo seed as a fallback (useful for November demo)
+            MonthlySummaryCache.shared.seedDemoIfNeeded()
+            if let cached = MonthlySummaryCache.shared.cachedSummary(month: month, year: year) {
+                summary = cached
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
         
         isLoading = false
