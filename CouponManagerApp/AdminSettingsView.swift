@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 struct AdminSettingsView: View {
     let user: User
@@ -215,6 +216,39 @@ struct AdminSettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color.green)
+                .cornerRadius(10)
+                
+                Button("שלח התראת סיכום דמה") {
+                    let content = UNMutableNotificationContent()
+                    let displayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ??
+                        Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ??
+                        "CouponManagerApp"
+                    content.title = displayName
+                    content.body = "סיכום דמה מוכן! ראה כמה חסכת."
+                    content.sound = .default
+                    content.userInfo = [
+                        "type": "monthly_summary",
+                        "summary_id": "demo-\(Int(Date().timeIntervalSince1970))",
+                        "month": Calendar.current.component(.month, from: Date()),
+                        "year": Calendar.current.component(.year, from: Date()),
+                        "style": "friendly"
+                    ]
+                    
+                    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+                    let request = UNNotificationRequest(identifier: "demo-monthly-summary", content: content, trigger: trigger)
+                    UNUserNotificationCenter.current().add(request) { error in
+                        if let error = error {
+                            print("❌ Failed to schedule demo monthly summary: \(error)")
+                        }
+                    }
+                    testMessage = "סיכום חודשי דמה יישלח בעוד 3 שניות"
+                    showingAlert = true
+                }
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue)
                 .cornerRadius(10)
                 
                 

@@ -13,11 +13,14 @@ struct ProfileView: View {
     let user: User
     let onLogout: () -> Void
     
+    @Environment(\.dismiss) private var dismiss
     @State private var showingFaceIDAlert = false
     @State private var faceIDAlertMessage = ""
     @State private var isLoading = false
     @State private var showingAdminSettings = false
     @State private var showingWidgetManagement = false
+    @State private var showingMonthlySummaries = false
+    @State private var monthlySummaryEnabled: Bool = true
     private let apiClient = APIClient()
     @StateObject private var faceIDManager = FaceIDManager.shared
     
@@ -50,6 +53,7 @@ struct ProfileView: View {
                 Task {
                     await faceIDManager.loadFaceIDPreference(for: user.id)
                 }
+                monthlySummaryEnabled = UserDefaults.standard.object(forKey: "monthlySummaryEnabled") as? Bool ?? user.telegramMonthlySummary
             }
             .rtlAlert("זיהוי פנים",
                       isPresented: $showingFaceIDAlert,
@@ -63,6 +67,23 @@ struct ProfileView: View {
             .sheet(isPresented: $showingWidgetManagement) {
                 WidgetCouponsOrderingView(user: user) {
                     // Handle any updates if needed
+                }
+            }
+            .sheet(isPresented: $showingMonthlySummaries) {
+                MonthlySummariesListView(user: user) { trigger in
+                    MonthlySummaryCache.shared.savePending(trigger: trigger)
+                    showingMonthlySummaries = false
+                    NotificationCenter.default.post(
+                        name: .navigateToMonthlySummary,
+                        object: nil,
+                        userInfo: [
+                            "summaryId": trigger.summaryId as Any,
+                            "month": trigger.month,
+                            "year": trigger.year,
+                            "style": trigger.style as Any
+                        ]
+                    )
+                    dismiss()
                 }
             }
         }
@@ -282,9 +303,46 @@ struct ProfileView: View {
             }
             
             ProfileInfoCard(title: "הגדרות כלליות", icon: "gear.circle.fill") {
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
+                    HStack {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("סיכום חודשי")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("קבל התראה וסיכום חודשי מהשרת")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $monthlySummaryEnabled)
+                            .labelsHidden()
+                            .onChange(of: monthlySummaryEnabled) { _, newValue in
+                                persistMonthlySummaryToggle(newValue)
+                            }
+                    }
+                    
+                    Button(action: { showingMonthlySummaries = true }) {
+                        HStack {
+                            Image(systemName: "calendar")
+                            Text("סיכומים חודשיים")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            Image(systemName: "chevron.left")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .foregroundColor(primaryBlue)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(primaryBlue.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    Divider()
+                        .padding(.vertical, 4)
+                    
                     InfoRow(label: "ניוזלטר", value: user.newsletterSubscription ? "✅ מנוי" : "❌ לא מנוי")
-                    InfoRow(label: "סיכום טלגרם", value: user.telegramMonthlySummary ? "✅ פעיל" : "❌ לא פעיל")
                     InfoRow(label: "באנר וואטסאפ", value: user.showWhatsappBanner ? "✅ מוצג" : "❌ מוסתר")
                 }
             }
@@ -317,6 +375,11 @@ struct ProfileView: View {
     }
     
     // MARK: - Face ID Functions
+    private func persistMonthlySummaryToggle(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: "monthlySummaryEnabled")
+        AppGroupManager.shared.sharedUserDefaults?.set(enabled, forKey: "monthlySummaryEnabled")
+    }
+    
     private func handleFaceIDToggle(_ enabled: Bool) {
         if enabled {
             // Enable Face ID

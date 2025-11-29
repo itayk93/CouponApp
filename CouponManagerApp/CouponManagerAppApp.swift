@@ -24,7 +24,7 @@ struct CouponManagerAppApp: App {
     
     private func handleDeepLink(url: URL) {
         // Handle widget deep links (company filters and coupon detail)
-        if url.scheme == "couponmanager" || url.scheme == "couponmaster" {
+        if url.scheme == "couponmanager" || url.scheme == "couponmaster" || url.scheme == "coupmanager" {
             // Home screen deep link
             if url.host == "home" {
                 NotificationCenter.default.post(name: NSNotification.Name("NavigateToHome"), object: nil)
@@ -47,6 +47,35 @@ struct CouponManagerAppApp: App {
                     name: NSNotification.Name("NavigateToCompany"),
                     object: company
                 )
+                return
+            }
+            
+            if url.host == "monthly-summary" {
+                if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                    let month = components.queryItems?.first(where: { $0.name == "month" })?.value
+                    let year = components.queryItems?.first(where: { $0.name == "year" })?.value
+                    let summaryId = components.queryItems?.first(where: { $0.name == "summary_id" })?.value
+                    let style = components.queryItems?.first(where: { $0.name == "style" })?.value
+                    
+                    let trigger = MonthlySummaryTrigger(
+                        summaryId: summaryId,
+                        month: Int(month ?? "") ?? Calendar.current.component(.month, from: Date()),
+                        year: Int(year ?? "") ?? Calendar.current.component(.year, from: Date()),
+                        style: style
+                    )
+                    
+                    MonthlySummaryCache.shared.savePending(trigger: trigger)
+                    NotificationCenter.default.post(
+                        name: .navigateToMonthlySummary,
+                        object: nil,
+                        userInfo: [
+                            "summaryId": trigger.summaryId as Any,
+                            "month": trigger.month,
+                            "year": trigger.year,
+                            "style": trigger.style as Any
+                        ]
+                    )
+                }
                 return
             }
 

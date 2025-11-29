@@ -17,6 +17,21 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     private let center = UNUserNotificationCenter.current()
     private let globalSettings = GlobalNotificationSettings.shared
     
+    private var appDisplayName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ??
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ??
+        "CouponManagerApp"
+    }
+    
+    private func makeNotificationContent(body: String, userInfo: [AnyHashable: Any]) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = appDisplayName
+        content.body = body
+        content.sound = .default
+        content.userInfo = userInfo
+        return content
+    }
+    
     override init() {
         super.init()
         center.delegate = self
@@ -60,14 +75,33 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     }
     
     func scheduleExpirationNotifications(for coupons: [Coupon]) {
-        
-        
-        // Cancel existing notifications
-        center.removeAllPendingNotificationRequests()
-        
+        clearCouponNotifications { [weak self] in
+            self?.performScheduling(for: coupons)
+        }
+    }
+    
+    private func clearCouponNotifications(completion: @escaping () -> Void) {
+        center.getPendingNotificationRequests { [weak self] requests in
+            let ids = requests
+                .map(\.identifier)
+                .filter { id in
+                    id.hasPrefix("daily-") ||
+                    id.hasPrefix("specific-day-") ||
+                    id.hasPrefix("expiration-") ||
+                    id.hasPrefix("monthly-")
+                }
+            
+            if !ids.isEmpty {
+                self?.center.removePendingNotificationRequests(withIdentifiers: ids)
+            }
+            
+            completion()
+        }
+    }
+    
+    private func performScheduling(for coupons: [Coupon]) {
         let calendar = Calendar.current
         let now = Date()
-        var scheduledCount = 0
         
         for coupon in coupons {
             guard let expirationDate = coupon.expirationDate,
@@ -84,7 +118,6 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             if daysUntilExpiration == 30 {
                 print("🗓️ Scheduling monthly notification for coupon \(coupon.id)")
                 scheduleMonthlyNotification(for: coupon, expirationDate: expirationDate)
-                scheduledCount += 1
             }
             
             // Schedule daily notifications for the last week (7 days before) - EVERY DAY
@@ -93,7 +126,6 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
                 // Schedule notifications for each remaining day
                 for dayNumber in 1...daysUntilExpiration {
                     scheduleSpecificDayNotification(for: coupon, daysLeft: dayNumber, expirationDate: expirationDate)
-                    scheduledCount += 1
                 }
             }
             
@@ -101,7 +133,6 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             if daysUntilExpiration == 0 {
                 print("🚨 Scheduling expiration day notification for coupon \(coupon.id)")
                 scheduleExpirationDayNotification(for: coupon, expirationDate: expirationDate)
-                scheduledCount += 1
             }
         }
         
@@ -109,17 +140,15 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     }
     
     private func scheduleMonthlyNotification(for coupon: Coupon, expirationDate: Date) {
-        let content = UNMutableNotificationContent()
-        content.title = "קופון עומד לפוג תוקף החודש"
-        
         let monthFormatter = DateFormatter()
         monthFormatter.locale = Locale(identifier: "he_IL")
         monthFormatter.dateFormat = "MMMM"
         let monthName = monthFormatter.string(from: expirationDate)
         
-        content.body = "הקופון של \(coupon.company) יפוג תוקף ב\(monthName). כדאי לנצל אותו עד \(coupon.formattedExpirationDate)"
-        content.sound = .default
-        content.userInfo = ["couponId": coupon.id, "type": "monthly"]
+        let content = makeNotificationContent(
+            body: "הקופון של \(coupon.company) יפוג תוקף ב\(monthName). כדאי לנצל אותו עד \(coupon.formattedExpirationDate)",
+            userInfo: ["couponId": coupon.id, "type": "monthly"]
+        )
         
         // Get global settings for monthly notification time
         let monthlyHour = globalSettings.monthlyNotificationHour
@@ -153,9 +182,6 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     }
     
     private func scheduleDailyNotifications(for coupon: Coupon, daysLeft: Int, expirationDate: Date) {
-        let content = UNMutableNotificationContent()
-        content.title = "קופון עומד לפוג תוקף!"
-        
         let daysText: String
         switch daysLeft {
         case 1:
@@ -168,9 +194,10 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             daysText = "נשארו \(daysLeft) ימים"
         }
         
-        content.body = "הקופון של \(coupon.company) יפוג תוקף \(daysText). לחץ כדי לצפות בפרטים"
-        content.sound = .default
-        content.userInfo = ["couponId": coupon.id, "type": "daily"]
+        let content = makeNotificationContent(
+            body: "הקופון של \(coupon.company) יפוג תוקף \(daysText). לחץ כדי לצפות בפרטים",
+            userInfo: ["couponId": coupon.id, "type": "daily"]
+        )
         
         // Schedule for 10 AM the next morning - EVERY morning leading up to expiration
         let calendar = Calendar.current
@@ -206,9 +233,6 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     }
     
     private func scheduleSpecificDayNotification(for coupon: Coupon, daysLeft: Int, expirationDate: Date) {
-        let content = UNMutableNotificationContent()
-        content.title = "קופון עומד לפוג תוקף!"
-        
         let daysText: String
         switch daysLeft {
         case 1:
@@ -221,9 +245,10 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             daysText = "נשארו \(daysLeft) ימים"
         }
         
-        content.body = "הקופון של \(coupon.company) יפוג תוקף \(daysText). לחץ כדי לצפות בפרטים"
-        content.sound = .default
-        content.userInfo = ["couponId": coupon.id, "type": "specific_day"]
+        let content = makeNotificationContent(
+            body: "הקופון של \(coupon.company) יפוג תוקף \(daysText). לחץ כדי לצפות בפרטים",
+            userInfo: ["couponId": coupon.id, "type": "specific_day"]
+        )
         
         // Get global settings for notification time
         let notificationHour = globalSettings.dailyNotificationHour
@@ -254,11 +279,10 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     }
     
     private func scheduleExpirationDayNotification(for coupon: Coupon, expirationDate: Date) {
-        let content = UNMutableNotificationContent()
-        content.title = "קופון פג תוקף היום!!!"
-        content.body = "הקופון של \(coupon.company) פג תוקף היום! לחץ כדי לצפות בפרטים"
-        content.sound = .default
-        content.userInfo = ["couponId": coupon.id, "type": "expiration"]
+        let content = makeNotificationContent(
+            body: "הקופון של \(coupon.company) פג תוקף היום! לחץ כדי לצפות בפרטים",
+            userInfo: ["couponId": coupon.id, "type": "expiration"]
+        )
         
         // Get global settings for expiration day notification time
         let expirationHour = globalSettings.expirationDayHour
@@ -300,11 +324,10 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             return 
         }
         
-        let content = UNMutableNotificationContent()
-        content.title = "🔔 בדיקת מערכת התראות"
-        content.body = "מערכת ההתראות פועלת כראוי! זה בדיקה לוודא שהכל עובד"
-        content.sound = .default
-        content.userInfo = ["type": "test"]
+        let content = makeNotificationContent(
+            body: "מערכת ההתראות פועלת כראוי! זה בדיקה לוודא שהכל עובד",
+            userInfo: ["type": "test"]
+        )
         
         // Schedule for 5 seconds from now
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
@@ -356,6 +379,34 @@ extension NotificationManager {
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
+        
+        if let type = userInfo["type"] as? String, type == "monthly_summary" {
+            let summaryId = userInfo["summary_id"] as? String ?? userInfo["summaryId"] as? String
+            let monthValue = (userInfo["month"] as? Int) ?? Int((userInfo["month"] as? String) ?? "")
+            let yearValue = (userInfo["year"] as? Int) ?? Int((userInfo["year"] as? String) ?? "")
+            let style = userInfo["style"] as? String
+            
+            let trigger = MonthlySummaryTrigger(
+                summaryId: summaryId,
+                month: monthValue ?? Calendar.current.component(.month, from: Date()),
+                year: yearValue ?? Calendar.current.component(.year, from: Date()),
+                style: style
+            )
+            
+            MonthlySummaryCache.shared.savePending(trigger: trigger)
+            NotificationCenter.default.post(
+                name: .navigateToMonthlySummary,
+                object: nil,
+                userInfo: [
+                    "summaryId": trigger.summaryId as Any,
+                    "month": trigger.month,
+                    "year": trigger.year,
+                    "style": trigger.style as Any
+                ]
+            )
+            completionHandler()
+            return
+        }
         
         if let couponId = userInfo["couponId"] as? Int {
             // Navigate to coupon detail view

@@ -39,6 +39,10 @@ struct CouponsListView: View {
     @State private var lastSelectedCouponIdForRestore: Int? = nil
     @State private var expiringCoupons: [Coupon] = []
     @State private var selectedCompanyFromWidget: String? = nil
+    @State private var monthlySummaryTrigger: MonthlySummaryTrigger? = nil
+    @State private var showingMonthlySummary = false
+    @State private var showingMonthlySummariesList = false
+    @State private var monthlySummaryFilter: (month: Int, year: Int)? = nil
     
     var body: some View {
         withEventHandlers
@@ -191,9 +195,14 @@ struct CouponsListView: View {
             .sheet(isPresented: $showingSavingsReport) {
                 SavingsReportView(
                     user: user,
-                    coupons: coupons.filter { !$0.isForSale }
+                    coupons: coupons.filter { !$0.isForSale },
+                    initialMonth: monthlySummaryFilter?.month,
+                    initialYear: monthlySummaryFilter?.year
                 )
                 .environment(\.layoutDirection, .rightToLeft)
+                .onDisappear {
+                    monthlySummaryFilter = nil
+                }
             }
             .sheet(isPresented: $showingProfile) {
                 ProfileView(user: user) {
@@ -205,6 +214,29 @@ struct CouponsListView: View {
             .sheet(item: $selectedCouponForDetail) { coupon in
                 NavigationView {
                     CouponDetailView(coupon: coupon, user: user, companies: companies, onUpdate: loadData)
+                }
+            }
+            .sheet(isPresented: $showingMonthlySummariesList) {
+                MonthlySummariesListView(user: user) { trigger in
+                    monthlySummaryTrigger = trigger
+                    showingMonthlySummary = true
+                    showingMonthlySummariesList = false
+                }
+            }
+            .sheet(isPresented: $showingMonthlySummary) {
+                if let trigger = monthlySummaryTrigger {
+                    MonthlySummaryView(
+                        userId: user.id,
+                        month: trigger.month,
+                        year: trigger.year,
+                        summaryId: trigger.summaryId,
+                        onOpenStatistics: { summary in
+                            monthlySummaryFilter = (month: summary.month, year: summary.year)
+                            showingMonthlySummary = false
+                            showingSavingsReport = true
+                        },
+                        onClose: { showingMonthlySummary = false }
+                    )
                 }
             }
     }
@@ -222,6 +254,7 @@ struct CouponsListView: View {
                 
                 // Ensure user data is saved to shared container every time the app appears
                 AppGroupManager.shared.saveCurrentUserToSharedContainer(user)
+                consumePendingMonthlySummaryIfNeeded()
             }
             .onChange(of: scenePhase) { phase in
                 switch phase {
@@ -262,6 +295,20 @@ struct CouponsListView: View {
                    let coupon = coupons.first(where: { $0.id == couponId }) {
                     selectedCouponForDetail = coupon
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToMonthlySummary)) { notification in
+                let monthValue = notification.userInfo?["month"] as? Int ?? Calendar.current.component(.month, from: Date())
+                let yearValue = notification.userInfo?["year"] as? Int ?? Calendar.current.component(.year, from: Date())
+                let summaryId = notification.userInfo?["summaryId"] as? String
+                let style = notification.userInfo?["style"] as? String
+                
+                monthlySummaryTrigger = MonthlySummaryTrigger(
+                    summaryId: summaryId,
+                    month: monthValue,
+                    year: yearValue,
+                    style: style
+                )
+                showingMonthlySummary = true
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToAddFromImage"))) { notification in
                 // Expecting a file name stored in the shared app group container
@@ -897,6 +944,13 @@ struct CouponsListView: View {
             return 
         }
         notificationManager.updateNotifications(for: coupons)
+    }
+    
+    private func consumePendingMonthlySummaryIfNeeded() {
+        if let trigger = MonthlySummaryCache.shared.consumePending() {
+            monthlySummaryTrigger = trigger
+            showingMonthlySummary = true
+        }
     }
     
     private func updateExpiringCoupons() {

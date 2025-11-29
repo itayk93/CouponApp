@@ -54,6 +54,18 @@ struct SavingsReportView: View {
     // Debounce recomputations when multiple controls change quickly
     @State private var recomputeWorkItem: DispatchWorkItem? = nil
 
+    init(user: User, coupons: [Coupon], initialMonth: Int? = nil, initialYear: Int? = nil) {
+        self.user = user
+        self.coupons = coupons
+        let currentMonth = Calendar.current.component(.month, from: Date())
+        let currentYear = Calendar.current.component(.year, from: Date())
+        _selectedMonth = State(initialValue: initialMonth ?? currentMonth)
+        _selectedYear = State(initialValue: initialYear ?? currentYear)
+        if initialMonth != nil || initialYear != nil {
+            _selectedTimeframe = State(initialValue: .thisMonth)
+        }
+    }
+
     // Cached formatters to avoid per-render allocations
     private static let yearFormatter: DateFormatter = {
         let df = DateFormatter()
