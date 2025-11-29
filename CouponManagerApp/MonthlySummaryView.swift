@@ -95,14 +95,6 @@ struct MonthlySummaryView: View {
     
     private var header: some View {
         HStack {
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.white.opacity(0.9))
-            }
-            
-            Spacer()
-            
             VStack(alignment: .trailing, spacing: 4) {
                 Text("סיכום חודשי")
                     .font(.headline)
@@ -110,6 +102,13 @@ struct MonthlySummaryView: View {
                 Text("\(monthName(for: month)) \(year)")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.85))
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.white.opacity(0.9))
             }
         }
     }
@@ -121,6 +120,7 @@ struct MonthlySummaryView: View {
                     Text("📆 סיכום \(summary.monthName) \(summary.year)")
                         .font(.title3.weight(.bold))
                         .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     Text(styleLabel(for: summary.style))
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(.blue.opacity(0.8))
@@ -128,10 +128,8 @@ struct MonthlySummaryView: View {
                         .padding(.vertical, 6)
                         .background(Color.white.opacity(0.9))
                         .cornerRadius(14)
-                        .frame(alignment: .trailing)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                
-                Spacer()
                 
                 Circle()
                     .fill(Color.white.opacity(0.2))
@@ -148,6 +146,7 @@ struct MonthlySummaryView: View {
             .background(Color.white.opacity(0.08))
             .cornerRadius(18)
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .onAppear { heroPulse = true }
     }
     
@@ -231,7 +230,7 @@ struct MonthlySummaryView: View {
             
             VStack(alignment: .trailing, spacing: 8) {
                 if !summary.stats.popularCompanies.isEmpty {
-                    HStack {
+                    HStack(spacing: 8) {
                         ForEach(summary.stats.popularCompanies.prefix(3)) { company in
                             Text("\(company.name) • \(company.usageCount)")
                                 .font(.footnote.weight(.semibold))
@@ -240,8 +239,8 @@ struct MonthlySummaryView: View {
                                 .background(Color.white.opacity(0.12))
                                 .cornerRadius(12)
                         }
-                        Spacer()
                     }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 
                 HStack {
@@ -283,11 +282,11 @@ struct MonthlySummaryView: View {
                 onOpenStatistics?(summary)
             }) {
                 HStack {
-                    Image(systemName: "chart.pie.fill")
+                    Image(systemName: "chevron.left")
+                    Spacer(minLength: 0)
                     Text("פתח סטטיסטיקות")
                         .fontWeight(.semibold)
-                    Spacer()
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chart.pie.fill")
                 }
                 .foregroundColor(.blue)
                 .padding()
@@ -302,8 +301,9 @@ struct MonthlySummaryView: View {
                 } label: {
                     HStack {
                         Image(systemName: "square.and.arrow.up")
+                        Spacer(minLength: 0)
                         Text("שיתוף")
-                        Spacer()
+                            .fontWeight(.semibold)
                     }
                     .foregroundColor(.white)
                     .padding()
@@ -315,8 +315,9 @@ struct MonthlySummaryView: View {
                 Button(action: onClose) {
                     HStack {
                         Image(systemName: "xmark")
+                        Spacer(minLength: 0)
                         Text("סגור")
-                        Spacer()
+                            .fontWeight(.semibold)
                     }
                     .foregroundColor(.white)
                     .padding()
