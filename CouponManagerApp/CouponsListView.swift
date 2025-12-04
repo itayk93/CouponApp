@@ -504,18 +504,19 @@ struct CouponsListView: View {
     private var searchFilterBar: some View {
         VStack(spacing: 12) {
             HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                
                 TextField("חיפוש קופונים...", text: $searchText)
                     .textFieldStyle(PlainTextFieldStyle())
-                
+                    .multilineTextAlignment(.trailing)
+
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.gray)
                     }
                 }
+
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
