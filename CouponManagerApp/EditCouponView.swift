@@ -26,9 +26,7 @@ struct EditCouponView: View {
     @State private var source: String
     @State private var buyMeUrl: String
     @State private var straussUrl: String
-    @State private var xgiftcardUrl: String
     @State private var hasStraussUrl: Bool
-    @State private var hasXGiftCardUrl: Bool
     @State private var hasXtraUrl: Bool
     @State private var xtraUrl: String
     @State private var isOneTime: Bool
@@ -59,10 +57,8 @@ struct EditCouponView: View {
         _source = State(initialValue: coupon.source ?? "")
         _buyMeUrl = State(initialValue: coupon.decryptedBuyMeUrl ?? "")
         _straussUrl = State(initialValue: coupon.decryptedStraussUrl ?? "")
-        _xgiftcardUrl = State(initialValue: coupon.xgiftcardCouponUrl ?? "")
         _xtraUrl = State(initialValue: coupon.decryptedXtraUrl ?? "")
         _hasStraussUrl = State(initialValue: !(coupon.straussCouponUrl?.isEmpty ?? true))
-        _hasXGiftCardUrl = State(initialValue: !(coupon.xgiftcardCouponUrl?.isEmpty ?? true))
         _hasXtraUrl = State(initialValue: !(coupon.xtraCouponUrl?.isEmpty ?? true))
         _isOneTime = State(initialValue: coupon.isOneTime)
         _purpose = State(initialValue: coupon.purpose ?? "")
@@ -496,22 +492,6 @@ struct EditCouponView: View {
             }
             
             // XGiftCard URL section
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("קישור XGiftCard", isOn: $hasXGiftCardUrl)
-                    .toggleStyle(SwitchToggleStyle(tint: Color.appBlue))
-                
-                if hasXGiftCardUrl {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("קישור XGiftCard (אופציונלי)")
-                            .fontWeight(.medium)
-                        TextField("הדבק כאן את הקישור לקופון XGiftCard", text: $xgiftcardUrl)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .keyboardType(.URL)
-                            .autocapitalization(.none)
-                    }
-                }
-            }
-            
             // Xtra URL section
             VStack(alignment: .leading, spacing: 12) {
                 Toggle("קישור Xtra", isOn: $hasXtraUrl)
@@ -673,7 +653,6 @@ struct EditCouponView: View {
         // Encrypt URL fields
         let encryptedBuyMeUrl = buyMeUrl.isEmpty ? nil : EncryptionManager.encryptString(buyMeUrl)
         let encryptedStraussUrl = (hasStraussUrl && !straussUrl.isEmpty) ? EncryptionManager.encryptString(straussUrl) : nil
-        let encryptedXGiftCardUrl = (hasXGiftCardUrl && !xgiftcardUrl.isEmpty) ? EncryptionManager.encryptString(xgiftcardUrl) : nil
         let encryptedXtraUrl = (hasXtraUrl && !xtraUrl.isEmpty) ? EncryptionManager.encryptString(xtraUrl) : nil
         
         let updateData: [String: Any] = [
@@ -686,7 +665,6 @@ struct EditCouponView: View {
             "source": source.isEmpty ? NSNull() : source,
             "buyme_coupon_url": encryptedBuyMeUrl ?? NSNull(),
             "strauss_coupon_url": encryptedStraussUrl ?? NSNull(),
-            "xgiftcard_coupon_url": encryptedXGiftCardUrl ?? NSNull(),
             "xtra_coupon_url": encryptedXtraUrl ?? NSNull(),
             "is_one_time": isOneTime,
             "purpose": (isOneTime && !purpose.isEmpty) ? purpose : NSNull(),

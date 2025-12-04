@@ -29,9 +29,7 @@ struct AddCouponView: View {
     @State private var source = ""
     @State private var buyMeUrl = ""
     @State private var straussUrl = ""
-    @State private var xgiftcardUrl = ""
     @State private var hasStraussUrl = false
-    @State private var hasXGiftCardUrl = false
     @State private var hasXtraUrl = false
     @State private var xtraUrl = ""
     @State private var isOneTime = false
@@ -757,22 +755,6 @@ struct AddCouponView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle("קישור XGiftCard", isOn: $hasXGiftCardUrl)
-                        .toggleStyle(SwitchToggleStyle(tint: Color.appBlue))
-                    
-                    if hasXGiftCardUrl {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("קישור XGiftCard (אופציונלי)")
-                                .fontWeight(.medium)
-                            TextField("הדבק כאן את הקישור לקופון XGiftCard", text: $xgiftcardUrl)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .keyboardType(.URL)
-                                .autocapitalization(.none)
-                        }
-                    }
-                }
-                
-                VStack(alignment: .leading, spacing: 12) {
                     Toggle("קישור Xtra", isOn: $hasXtraUrl)
                         .toggleStyle(SwitchToggleStyle(tint: Color.appBlue))
                     
@@ -971,7 +953,6 @@ struct AddCouponView: View {
             source: source.isEmpty ? nil : source,
             buyMeCouponUrl: buyMeUrl.isEmpty ? nil : buyMeUrl,
             straussCouponUrl: straussUrl.isEmpty ? nil : straussUrl,
-            xgiftcardCouponUrl: xgiftcardUrl.isEmpty ? nil : xgiftcardUrl,
             xtraCouponUrl: powerGiftUrl.isEmpty ? xtraUrl.isEmpty ? nil : xtraUrl : powerGiftUrl,
             cvv: includeCardInfo && !cvv.isEmpty ? cvv : nil,
             cardExp: includeCardInfo && !cardExpiry.isEmpty ? cardExpiry : nil,
