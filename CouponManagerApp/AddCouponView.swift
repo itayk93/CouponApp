@@ -49,6 +49,8 @@ struct AddCouponView: View {
     @State private var hasExpandedInstructions = false
     @Environment(\.colorScheme) private var colorScheme
     @State private var powerGiftUrl = ""
+    @State private var pendingCalculationWorkItem: DispatchWorkItem?
+    @FocusState private var focusedPricingField: PricingField?
     
     // MARK: - Dark Mode Support
     private var cardBackgroundColor: Color {
@@ -586,8 +588,11 @@ struct AddCouponView: View {
                     TextField("0", text: $cost)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .focused($focusedPricingField, equals: .cost)
                         .onChange(of: cost) { _, _ in
-                            updateCalculations(changedField: "cost")
+                            if focusedPricingField == .cost {
+                                scheduleCalculation(for: "cost")
+                            }
                         }
                     Text("₪")
                         .foregroundColor(.secondary)
@@ -602,8 +607,12 @@ struct AddCouponView: View {
                     TextField("0", text: $discountPercentage)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .focused($focusedPricingField, equals: .discount)
                         .onChange(of: discountPercentage) { _, _ in
-                            updateCalculations(changedField: "discount")
+                            if focusedPricingField == .discount {
+                                cancelScheduledCalculation()
+                                updateCalculations(changedField: "discount")
+                            }
                         }
                     Text("%")
                         .foregroundColor(.secondary)
@@ -625,8 +634,11 @@ struct AddCouponView: View {
                     TextField("0", text: $value)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .focused($focusedPricingField, equals: .value)
                         .onChange(of: value) { _, _ in
-                            updateCalculations(changedField: "value")
+                            if focusedPricingField == .value {
+                                scheduleCalculation(for: "value")
+                            }
                         }
                     Text("₪")
                         .foregroundColor(.secondary)
@@ -672,7 +684,7 @@ struct AddCouponView: View {
                     // Percentage text
                     HStack {
                         Spacer()
-                        Text("\(String(format: "%.2f", discountValue))%")
+                        Text("\(PricingFormatter.string(from: discountValue))%")
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(.primary)
@@ -1012,12 +1024,12 @@ struct AddCouponView: View {
         }
         
         if let extractedValue = data.value {
-            value = String(format: "%.2f", extractedValue)
+            value = PricingFormatter.string(from: extractedValue)
         }
         
         // Handle extracted cost
         if let extractedCost = data.cost {
-            cost = String(format: "%.2f", extractedCost)
+            cost = PricingFormatter.string(from: extractedCost)
         } else {
             cost = "0"
         }
@@ -1065,10 +1077,10 @@ struct AddCouponView: View {
         if let extractedValue = data.value, extractedValue > 0 {
             let extractedCost = data.cost ?? 0
             if extractedCost == 0 {
-                discountPercentage = "100.00"
+                discountPercentage = PricingFormatter.string(from: 100)
             } else {
                 let calculatedDiscount = ((extractedValue - extractedCost) / extractedValue) * 100
-                discountPercentage = String(format: "%.2f", max(0, calculatedDiscount))
+                discountPercentage = PricingFormatter.string(from: max(0, calculatedDiscount))
             }
         }
         
@@ -1096,6 +1108,22 @@ struct AddCouponView: View {
     }
     
     // MARK: - Calculation Functions
+    private func scheduleCalculation(for changedField: String) {
+        pendingCalculationWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            updateCalculations(changedField: changedField)
+        }
+
+        pendingCalculationWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+    }
+
+    private func cancelScheduledCalculation() {
+        pendingCalculationWorkItem?.cancel()
+        pendingCalculationWorkItem = nil
+    }
+
     private func updateCalculations(changedField: String) {
         let costValue = Double(cost) ?? 0
         let valueAmount = Double(value) ?? 0
@@ -1106,13 +1134,13 @@ struct AddCouponView: View {
             // Always calculate discount when cost or value changes (if both have values)
             if valueAmount > 0 {
                 if costValue == 0 {
-                    discountPercentage = "100.00"
+                    discountPercentage = PricingFormatter.string(from: 100)
                 } else if costValue <= valueAmount {
                     let calculatedDiscount = ((valueAmount - costValue) / valueAmount) * 100
-                    discountPercentage = String(format: "%.2f", max(0, min(100, calculatedDiscount)))
+                    discountPercentage = PricingFormatter.string(from: max(0, min(100, calculatedDiscount)))
                 } else {
                     // Cost is higher than value - set discount to 0
-                    discountPercentage = "0.00"
+                    discountPercentage = PricingFormatter.string(from: 0)
                 }
             }
             
@@ -1120,16 +1148,20 @@ struct AddCouponView: View {
             // Calculate cost from value and discount
             if valueAmount > 0 && discountValue >= 0 && discountValue <= 100 {
                 if discountValue == 100 {
-                    cost = "0.00"
+                    cost = PricingFormatter.string(from: 0)
                 } else {
                     let calculatedCost = valueAmount * (1 - discountValue / 100)
-                    cost = String(format: "%.2f", max(0, calculatedCost))
+                    cost = PricingFormatter.string(from: max(0, calculatedCost))
                 }
             }
             
-        default:
-            break
+            default:
+                break
         }
+    }
+
+    private enum PricingField: Hashable {
+        case cost, value, discount
     }
 }
 
