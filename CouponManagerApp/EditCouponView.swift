@@ -491,8 +491,6 @@ struct EditCouponView: View {
                 }
             }
             
-            // XGiftCard URL section
-            // Xtra URL section
             VStack(alignment: .leading, spacing: 12) {
                 Toggle("קישור Xtra", isOn: $hasXtraUrl)
                     .toggleStyle(SwitchToggleStyle(tint: Color.appBlue))
