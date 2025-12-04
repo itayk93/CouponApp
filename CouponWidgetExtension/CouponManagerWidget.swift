@@ -277,7 +277,10 @@ struct Provider: TimelineProvider {
                 
                 print("🎯 WIDGET: Entry created with \(entry.coupons.count) coupons, \(entry.activeCouponsCount) active, ₪\(entry.totalRemainingValue) total")
                 
-                let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: currentDate)!
+                let refreshIntervalMinutes = WidgetSettings.shared.widgetRefreshIntervalMinutes
+                debugLog += "Refresh interval: \(refreshIntervalMinutes) minutes\n"
+                print("🎯 WIDGET: Next refresh scheduled in \(refreshIntervalMinutes) minutes")
+                let nextUpdate = Calendar.current.date(byAdding: .minute, value: refreshIntervalMinutes, to: currentDate)!
                 let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
                 print("🎯 WIDGET: Timeline completed successfully")
                 completion(timeline)

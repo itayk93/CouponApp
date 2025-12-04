@@ -21,6 +21,9 @@ struct ProfileView: View {
     @State private var showingWidgetManagement = false
     @State private var showingMonthlySummaries = false
     @State private var monthlySummaryEnabled: Bool = true
+    @State private var widgetRefreshIntervalMinutes: Int = 10
+    @State private var widgetRefreshIntervalInput: String = ""
+    @State private var widgetRefreshIntervalStatus: String? = nil
     private let apiClient = APIClient()
     @StateObject private var faceIDManager = FaceIDManager.shared
     
@@ -54,6 +57,7 @@ struct ProfileView: View {
                     await faceIDManager.loadFaceIDPreference(for: user.id)
                 }
                 monthlySummaryEnabled = UserDefaults.standard.object(forKey: "monthlySummaryEnabled") as? Bool ?? user.telegramMonthlySummary
+                loadWidgetRefreshIntervalSetting()
             }
             .rtlAlert("זיהוי פנים",
                       isPresented: $showingFaceIDAlert,
@@ -341,9 +345,75 @@ struct ProfileView: View {
                     
                     Divider()
                         .padding(.vertical, 4)
-                    
+
                     InfoRow(label: "ניוזלטר", value: user.newsletterSubscription ? "✅ מנוי" : "❌ לא מנוי")
                     InfoRow(label: "באנר וואטסאפ", value: user.showWhatsappBanner ? "✅ מוצג" : "❌ מוסתר")
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    VStack(alignment: .trailing, spacing: 8) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("רענון ווידג'ט")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            Text("בחר כל כמה דקות שהווידג'ט יתעדכן")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack(spacing: 12) {
+                            TextField("דקות", text: $widgetRefreshIntervalInput)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.center)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 12)
+                                .background(Color(.systemGray5))
+                                .cornerRadius(8)
+                                .frame(width: 120)
+                                .onChange(of: widgetRefreshIntervalInput) { newValue in
+                                    let filtered = newValue.filter { $0.isNumber }
+                                    if filtered != newValue {
+                                        widgetRefreshIntervalInput = filtered
+                                    }
+                                    widgetRefreshIntervalStatus = nil
+                                }
+
+                            Button(action: {
+                                persistWidgetRefreshInterval()
+                            }) {
+                                Text("שמור")
+                                    .font(.subheadline)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(primaryBlue)
+                        }
+
+                        Button(action: {
+                            refreshWidgetNow()
+                        }) {
+                            Text("רענן עכשיו")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(primaryBlue.opacity(0.1))
+                                .foregroundColor(primaryBlue)
+                                .cornerRadius(12)
+                        }
+                        .buttonStyle(.plain)
+
+                        Text("התזמון הנוכחי: \(widgetRefreshIntervalMinutes) דקות")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        if let status = widgetRefreshIntervalStatus {
+                            Text(status)
+                                .font(.caption2)
+                                .foregroundColor(status.contains("שגיאה") ? .red : .green)
+                        }
+                    }
                 }
             }
         }
@@ -378,6 +448,29 @@ struct ProfileView: View {
     private func persistMonthlySummaryToggle(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: "monthlySummaryEnabled")
         AppGroupManager.shared.sharedUserDefaults?.set(enabled, forKey: "monthlySummaryEnabled")
+    }
+
+    private func loadWidgetRefreshIntervalSetting() {
+        let minutes = AppGroupManager.shared.widgetRefreshIntervalMinutes
+        widgetRefreshIntervalMinutes = minutes
+        widgetRefreshIntervalInput = "\(minutes)"
+    }
+
+    private func persistWidgetRefreshInterval() {
+        guard let minutes = Int(widgetRefreshIntervalInput), minutes > 0 else {
+            widgetRefreshIntervalStatus = "שגיאה: הזן מספר דקות תקף"
+            return
+        }
+
+        AppGroupManager.shared.updateWidgetRefreshIntervalMinutes(minutes)
+        widgetRefreshIntervalMinutes = minutes
+        widgetRefreshIntervalInput = "\(minutes)"
+        widgetRefreshIntervalStatus = "הווידג'ט יתעדכן כל \(minutes) דקות"
+    }
+
+    private func refreshWidgetNow() {
+        AppGroupManager.shared.refreshWidgetTimelines()
+        widgetRefreshIntervalStatus = "הווידג'ט ברענון"
     }
     
     private func handleFaceIDToggle(_ enabled: Bool) {

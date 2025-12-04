@@ -7,11 +7,34 @@ class AppGroupManager {
     private let appGroupIdentifier = "group.com.itaykarkason.CouponManagerApp"
     private let userDefaultsKey = "SharedCouponData"
     private let companiesKey = "SharedCompaniesData"
+    private let widgetRefreshIntervalKey = "WidgetRefreshIntervalMinutes"
+    private let defaultWidgetRefreshIntervalMinutes = 10
     
     private init() {}
     
     var sharedUserDefaults: UserDefaults? {
         return UserDefaults(suiteName: appGroupIdentifier)
+    }
+
+    var widgetRefreshIntervalMinutes: Int {
+        guard let sharedDefaults = sharedUserDefaults else {
+            return defaultWidgetRefreshIntervalMinutes
+        }
+
+        if let storedValue = sharedDefaults.object(forKey: widgetRefreshIntervalKey) as? Int {
+            return max(1, storedValue)
+        }
+
+        return defaultWidgetRefreshIntervalMinutes
+    }
+
+    func updateWidgetRefreshIntervalMinutes(_ minutes: Int) {
+        guard let sharedDefaults = sharedUserDefaults else {
+            return
+        }
+
+        let sanitizedValue = max(1, minutes)
+        sharedDefaults.set(sanitizedValue, forKey: widgetRefreshIntervalKey)
     }
     
     func saveCouponsToSharedContainer(_ coupons: [Coupon]) {
