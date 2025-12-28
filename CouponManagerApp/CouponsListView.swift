@@ -959,6 +959,7 @@ struct CouponsListView: View {
             !coupon.isForSale && 
             !coupon.isExpired && 
             !coupon.isFullyUsed && 
+            coupon.status == "פעיל" &&
             coupon.isExpiringInWeek
         }
     }

@@ -347,71 +347,77 @@ struct ProfileView: View {
                         .padding(.vertical, 4)
 
                     InfoRow(label: "ניוזלטר", value: user.newsletterSubscription ? "✅ מנוי" : "❌ לא מנוי")
-                    InfoRow(label: "באנר וואטסאפ", value: user.showWhatsappBanner ? "✅ מוצג" : "❌ מוסתר")
 
                     Divider()
                         .padding(.vertical, 8)
 
-                    VStack(alignment: .trailing, spacing: 8) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("רענון ווידג'ט")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
+                    HStack {
+                        Spacer()
 
-                            Text("בחר כל כמה דקות שהווידג'ט יתעדכן")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        VStack(alignment: .trailing, spacing: 12) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("רענון ווידג'ט")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
 
-                        HStack(spacing: 12) {
-                            TextField("דקות", text: $widgetRefreshIntervalInput)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 12)
-                                .background(Color(.systemGray5))
-                                .cornerRadius(8)
-                                .frame(width: 120)
-                                .onChange(of: widgetRefreshIntervalInput) { newValue in
-                                    let filtered = newValue.filter { $0.isNumber }
-                                    if filtered != newValue {
-                                        widgetRefreshIntervalInput = filtered
+                                Text("בחר כל כמה דקות שהווידג'ט יתעדכן")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+
+                            HStack(spacing: 12) {
+                                Spacer()
+
+                                TextField("דקות", text: $widgetRefreshIntervalInput)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .background(Color(.systemGray5))
+                                    .cornerRadius(8)
+                                    .frame(width: 120)
+                                    .onChange(of: widgetRefreshIntervalInput) { newValue in
+                                        let filtered = newValue.filter { $0.isNumber }
+                                        if filtered != newValue {
+                                            widgetRefreshIntervalInput = filtered
+                                        }
+                                        widgetRefreshIntervalStatus = nil
                                     }
-                                    widgetRefreshIntervalStatus = nil
+
+                                Button("שמור") {
+                                    persistWidgetRefreshInterval()
                                 }
+                                .buttonStyle(.borderedProminent)
+                                .tint(primaryBlue)
+                            }
 
                             Button(action: {
-                                persistWidgetRefreshInterval()
+                                refreshWidgetNow()
                             }) {
-                                Text("שמור")
+                                Text("רענן עכשיו")
                                     .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 16)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .background(primaryBlue.opacity(0.1))
+                                    .foregroundColor(primaryBlue)
+                                    .cornerRadius(12)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(primaryBlue)
-                        }
+                            .buttonStyle(.plain)
 
-                        Button(action: {
-                            refreshWidgetNow()
-                        }) {
-                            Text("רענן עכשיו")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(primaryBlue.opacity(0.1))
-                                .foregroundColor(primaryBlue)
-                                .cornerRadius(12)
-                        }
-                        .buttonStyle(.plain)
+                            Text("התזמון הנוכחי: \(widgetRefreshIntervalMinutes) דקות")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
 
-                        Text("התזמון הנוכחי: \(widgetRefreshIntervalMinutes) דקות")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        if let status = widgetRefreshIntervalStatus {
-                            Text(status)
-                                .font(.caption2)
-                                .foregroundColor(status.contains("שגיאה") ? .red : .green)
+                            if let status = widgetRefreshIntervalStatus {
+                                Text(status)
+                                    .font(.caption2)
+                                    .foregroundColor(status.contains("שגיאה") ? .red : .green)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                            }
                         }
                     }
                 }

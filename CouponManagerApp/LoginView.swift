@@ -465,7 +465,6 @@ struct MainAppView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 InfoRow(label: "ניוזלטר", value: user.newsletterSubscription ? "✅ מנוי" : "❌ לא מנוי")
                                 InfoRow(label: "סיכום טלגרם", value: user.telegramMonthlySummary ? "✅ פעיל" : "❌ לא פעיל")
-                                InfoRow(label: "באנר וואטסאפ", value: user.showWhatsappBanner ? "✅ מוצג" : "❌ מוסתר")
                             }
                         }
                     }

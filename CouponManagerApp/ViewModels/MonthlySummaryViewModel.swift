@@ -22,7 +22,7 @@ final class MonthlySummaryViewModel: ObservableObject {
         
         // Try demo/cached first for quick display
         if !forceRefresh {
-            MonthlySummaryCache.shared.seedDemoIfNeeded()
+            MonthlySummaryCache.shared.seedDemoSummaryIfNeeded()
             if let cached = MonthlySummaryCache.shared.cachedSummary(month: month, year: year) {
                 summary = cached
                 isLoading = false
@@ -42,7 +42,7 @@ final class MonthlySummaryViewModel: ObservableObject {
             await acknowledgeIfNeeded(result.id)
         } catch {
             // On failure, try demo seed as a fallback (useful for November demo)
-            MonthlySummaryCache.shared.seedDemoIfNeeded()
+            MonthlySummaryCache.shared.seedDemoSummaryIfNeeded()
             if let cached = MonthlySummaryCache.shared.cachedSummary(month: month, year: year) {
                 summary = cached
             } else {

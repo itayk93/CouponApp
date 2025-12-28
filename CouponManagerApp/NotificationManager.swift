@@ -107,7 +107,8 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             guard let expirationDate = coupon.expirationDate,
                   expirationDate > now,
                   !coupon.isExpired,
-                  !coupon.isFullyUsed else { 
+                  !coupon.isFullyUsed,
+                  coupon.status == "פעיל" else { 
                 //print("⏭️ Skipping coupon \(coupon.id) (\(coupon.company)) - expired or fully used")
                 continue 
             }
